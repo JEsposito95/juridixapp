@@ -9,6 +9,7 @@ public class Expediente {
     private String numero;
     private String caratula;
     private String cliente;
+    private Integer clienteId;
     private String demandado;
     private String fuero;
     private String juzgado;
@@ -202,6 +203,13 @@ public class Expediente {
 
     public void setFechaModificacionFromString(String fecha) {
         this.fechaModificacion = fecha != null && !fecha.isEmpty() ? LocalDateTime.parse(fecha, DATETIME_FORMATTER) : null;
+    }
+    public Integer getClienteId() {
+        return clienteId;
+    }
+
+    public void setClienteId(Integer clienteId) {
+        this.clienteId = clienteId;
     }
 
     // Validación

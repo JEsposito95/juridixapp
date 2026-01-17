@@ -14,18 +14,16 @@ public class DatabaseInitializer {
         PreparedStatement ps = null;
 
         try {
-            // Obtener conexión
             conn = Database.getConnection();
             stmt = conn.createStatement();
 
-            // IMPORTANTE: Configurar SQLite para evitar locks
             stmt.execute("PRAGMA journal_mode=WAL");
             stmt.execute("PRAGMA busy_timeout=5000");
             stmt.execute("PRAGMA foreign_keys=ON");
 
             System.out.println("🔧 Inicializando base de datos...");
 
-            // Tabla de usuarios
+            // ========== TABLA USUARIOS ==========
             String usuariosTable = """
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +38,7 @@ public class DatabaseInitializer {
                 );
             """;
 
-            // Tabla de expedientes
+            // ========== TABLA EXPEDIENTES ==========
             String expedientesTable = """
                 CREATE TABLE IF NOT EXISTS expedientes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,26 +61,136 @@ public class DatabaseInitializer {
                 );
             """;
 
-            // Ejecutar creación de tablas
+            // ========== TABLA MOVIMIENTOS ==========
+            String movimientosTable = """
+                CREATE TABLE IF NOT EXISTS movimientos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expediente_id INTEGER NOT NULL,
+                    fecha DATE NOT NULL,
+                    tipo TEXT NOT NULL CHECK(tipo IN ('PRESENTACION', 'AUDIENCIA', 'RESOLUCION', 'NOTIFICACION', 'OTRO')),
+                    descripcion TEXT NOT NULL,
+                    cuaderno TEXT,
+                    foja INTEGER,
+                    observaciones TEXT,
+                    usuario_id INTEGER NOT NULL,
+                    fecha_creacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                );
+            """;
+
+            // ========== TABLA EVENTOS AGENDA ==========
+            String agendaTable = """
+                CREATE TABLE IF NOT EXISTS eventos_agenda (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    titulo TEXT NOT NULL,
+                    descripcion TEXT,
+                    fecha_hora TEXT NOT NULL,
+                    duracion_minutos INTEGER DEFAULT 60,
+                    tipo TEXT NOT NULL CHECK(tipo IN ('AUDIENCIA', 'VENCIMIENTO', 'REUNION', 'PRESENTACION', 'OTRO')),
+                    expediente_id INTEGER,
+                    ubicacion TEXT,
+                    estado TEXT DEFAULT 'PENDIENTE' CHECK(estado IN ('PENDIENTE', 'COMPLETADO', 'CANCELADO')),
+                    recordatorio_minutos INTEGER DEFAULT 1440,
+                    color TEXT DEFAULT '#3498db',
+                    usuario_id INTEGER NOT NULL,
+                    fecha_creacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE SET NULL,
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                );
+            """;
+
+            // ========== TABLA CLIENTES ==========
+            String clientesTable = """
+                CREATE TABLE IF NOT EXISTS clientes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre_completo TEXT NOT NULL,
+                    dni TEXT,
+                    cuit_cuil TEXT,
+                    fecha_nacimiento TEXT,
+                    telefono TEXT,
+                    email TEXT,
+                    domicilio TEXT,
+                    localidad TEXT,
+                    provincia TEXT,
+                    codigo_postal TEXT,
+                    profesion TEXT,
+                    estado_civil TEXT,
+                    observaciones TEXT,
+                    activo INTEGER DEFAULT 1 CHECK(activo IN (0, 1)),
+                    usuario_creador_id INTEGER,
+                    fecha_creacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    fecha_modificacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (usuario_creador_id) REFERENCES usuarios(id)
+                );
+            """;
+
+            // ========== TABLA DOCUMENTOS CLIENTE ==========
+            String documentosClienteTable = """
+                CREATE TABLE IF NOT EXISTS documentos_cliente (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cliente_id INTEGER NOT NULL,
+                    nombre_archivo TEXT NOT NULL,
+                    nombre_original TEXT NOT NULL,
+                    ruta_archivo TEXT NOT NULL,
+                    tipo_documento TEXT,
+                    descripcion TEXT,
+                    tamanio_bytes INTEGER,
+                    extension TEXT,
+                    usuario_id INTEGER,
+                    fecha_subida TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                );
+            """;
+
+            // EJECUTAR CREACIÓN DE TABLAS
             stmt.execute(usuariosTable);
             System.out.println("✅ Tabla usuarios creada/verificada");
 
             stmt.execute(expedientesTable);
             System.out.println("✅ Tabla expedientes creada/verificada");
 
-            // Crear índices
+            stmt.execute(movimientosTable);
+            System.out.println("✅ Tabla movimientos creada/verificada");
+
+            stmt.execute(agendaTable);
+            System.out.println("✅ Tabla eventos_agenda creada/verificada");
+
+            stmt.execute(clientesTable);
+            System.out.println("✅ Tabla clientes creada/verificada");
+
+            stmt.execute(documentosClienteTable);
+            System.out.println("✅ Tabla documentos_cliente creada/verificada");
+
+            // Agregar cliente_id a expedientes (si no existe)
+            try {
+                stmt.execute("ALTER TABLE expedientes ADD COLUMN cliente_id INTEGER REFERENCES clientes(id)");
+                System.out.println("✅ Campo cliente_id agregado a expedientes");
+            } catch (SQLException e) {
+                System.out.println("ℹ️ Campo cliente_id ya existe en expedientes");
+            }
+
+            // ========== ÍNDICES ==========
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_expedientes_estado ON expedientes(estado)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_expedientes_cliente ON expedientes(cliente)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_expedientes_numero ON expedientes(numero)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_movimientos_expediente ON movimientos(expediente_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos(fecha)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_agenda_fecha ON eventos_agenda(fecha_hora)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_agenda_usuario ON eventos_agenda(usuario_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_agenda_estado ON eventos_agenda(estado)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes(nombre_completo)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_clientes_dni ON clientes(dni)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_clientes_activo ON clientes(activo)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_documentos_cliente ON documentos_cliente(cliente_id)");
             System.out.println("✅ Índices creados/verificados");
 
-            // Cerrar Statement antes de usar PreparedStatement
-            if (stmt != null) {
-                stmt.close();
-                stmt = null;
-            }
+            // ========== CERRAR STATEMENT ANTES DE USAR PREPAREDSTATEMENT ==========
+            stmt.close();
+            stmt = null;
 
-            // Insertar usuario admin por defecto
+            // ========== USUARIO ADMIN ==========
             String adminInsert = """
                 INSERT OR IGNORE INTO usuarios (username, password_hash, rol, nombre_completo, activo)
                 VALUES (?, ?, 'ADMIN', 'Administrador', 1)
@@ -107,7 +215,6 @@ public class DatabaseInitializer {
             throw new RuntimeException("Error crítico al inicializar la base de datos", e);
 
         } finally {
-            // CRÍTICO: Cerrar recursos en orden inverso
             try {
                 if (ps != null) ps.close();
             } catch (SQLException e) {

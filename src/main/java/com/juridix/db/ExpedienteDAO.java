@@ -601,9 +601,43 @@ public class ExpedienteDAO {
 
         expediente.setObservaciones(rs.getString("observaciones"));
         expediente.setCreadorId(rs.getInt("creador_id"));
+        int clienteId = rs.getInt("cliente_id");
+        if (!rs.wasNull()) {
+            expediente.setClienteId(clienteId);
+        }
         expediente.setFechaCreacionFromString(rs.getString("fecha_creacion"));
         expediente.setFechaModificacionFromString(rs.getString("fecha_modificacion"));
 
         return expediente;
+    }
+    /**
+     * Obtiene todos los expedientes de un cliente específico
+     */
+    public List<Expediente> listarPorCliente(Integer clienteId) throws SQLException {
+        String sql = """
+        SELECT * FROM expedientes 
+        WHERE cliente_id = ?
+        ORDER BY fecha_inicio DESC
+    """;
+
+        List<Expediente> expedientes = new ArrayList<>();
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, clienteId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    expedientes.add(mapearExpediente(rs));
+                }
+            }
+
+            return expedientes;
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error al listar expedientes por cliente: " + e.getMessage());
+            throw e;
+        }
     }
 }
