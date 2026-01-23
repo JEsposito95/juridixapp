@@ -8,7 +8,7 @@ import java.sql.SQLException;
 
 public class DatabaseInitializer {
 
-    public static void init() {
+    public static void init() throws SQLException {
         Connection conn = null;
         Statement stmt = null;
         PreparedStatement ps = null;
@@ -144,6 +144,63 @@ public class DatabaseInitializer {
                 );
             """;
 
+            // ========== TABLA HONORARIOS ==========
+            String honorariosTable = """
+                CREATE TABLE IF NOT EXISTS honorarios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expediente_id INTEGER NOT NULL,
+                    tipo TEXT NOT NULL CHECK(tipo IN ('PORCENTAJE', 'MONTO_FIJO', 'REGULACION_JUDICIAL')),
+                    porcentaje REAL,
+                    monto_fijo REAL,
+                    monto_calculado REAL,
+                    descripcion TEXT,
+                    estado TEXT DEFAULT 'PENDIENTE' CHECK(estado IN ('PENDIENTE', 'PARCIAL', 'COBRADO')),
+                    fecha_estimada TEXT,
+                    usuario_id INTEGER,
+                    fecha_creacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                );
+            """;
+
+            // ========== TABLA GASTOS ==========
+            String gastosTable = """
+                CREATE TABLE IF NOT EXISTS gastos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expediente_id INTEGER NOT NULL,
+                    concepto TEXT NOT NULL,
+                    monto REAL NOT NULL,
+                    fecha DATE NOT NULL,
+                    categoria TEXT,
+                    comprobante TEXT,
+                    observaciones TEXT,
+                    usuario_id INTEGER,
+                    fecha_creacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                );
+            """;
+
+            // ========== TABLA PAGOS ==========
+            String pagosTable = """
+                CREATE TABLE IF NOT EXISTS pagos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expediente_id INTEGER NOT NULL,
+                    cliente_id INTEGER,
+                    monto REAL NOT NULL,
+                    fecha DATE NOT NULL,
+                    forma_pago TEXT,
+                    referencia TEXT,
+                    concepto TEXT,
+                    observaciones TEXT,
+                    usuario_id INTEGER,
+                    fecha_creacion TEXT DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL,
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                );
+            """;
+
             // EJECUTAR CREACIÓN DE TABLAS
             stmt.execute(usuariosTable);
             System.out.println("✅ Tabla usuarios creada/verificada");
@@ -162,6 +219,15 @@ public class DatabaseInitializer {
 
             stmt.execute(documentosClienteTable);
             System.out.println("✅ Tabla documentos_cliente creada/verificada");
+
+            stmt.execute(honorariosTable);
+            System.out.println("✅ Tabla honorarios creada/verificada");
+
+            stmt.execute(gastosTable);
+            System.out.println("✅ Tabla gastos creada/verificada");
+
+            stmt.execute(pagosTable);
+            System.out.println("✅ Tabla pagos creada/verificada");
 
             // Agregar cliente_id a expedientes (si no existe)
             try {
@@ -184,6 +250,12 @@ public class DatabaseInitializer {
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_clientes_dni ON clientes(dni)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_clientes_activo ON clientes(activo)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_documentos_cliente ON documentos_cliente(cliente_id)");
+
+            // Índices económicos
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_honorarios_expediente ON honorarios(expediente_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_gastos_expediente ON gastos(expediente_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_pagos_expediente ON pagos(expediente_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_pagos_cliente ON pagos(cliente_id)");
             System.out.println("✅ Índices creados/verificados");
 
             // ========== CERRAR STATEMENT ANTES DE USAR PREPAREDSTATEMENT ==========

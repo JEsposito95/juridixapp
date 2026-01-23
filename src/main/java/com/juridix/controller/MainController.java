@@ -4,6 +4,8 @@ import com.juridix.db.ExpedienteDAO;
 import com.juridix.model.*;
 import com.juridix.service.*;
 import com.juridix.seguridad.SesionUsuario;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -23,18 +25,28 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+
+
 
 public class MainController {
 
     private final Stage stage;
     private Scene scene;
 
+    private Usuario usuarioActual;
     // Servicios
     private ExpedienteService expedienteService;
     private MovimientoService movimientoService;
     private EventoAgendaService agendaService;
+
+    // Servicios económicos
+    private HonorarioService honorarioService;
+    private GastoService gastoService;
+    private PagoService pagoService;
 
     // Componentes del formulario de expedientes
     private TextField txtNumero;
@@ -48,6 +60,8 @@ public class MainController {
     private DatePicker dpFechaInicio;
     private TextField txtMontoEstimado;
     private TextArea txtObservaciones;
+
+
 
     // Componentes de la tabla de expedientes
     private TableView<Expediente> tablaExpedientes;
@@ -79,6 +93,10 @@ public class MainController {
     // Cliente seleccionado para vista detallada
     private Cliente clienteSeleccionado;
 
+    // Agregar junto a los otros componentes
+    private ListView<String> listNotificaciones;
+
+
     public MainController(Stage stage) {
         this.stage = stage;
         this.expedienteService = new ExpedienteService();
@@ -87,6 +105,10 @@ public class MainController {
 
         this.clienteService = new ClienteService();
         this.documentoClienteService = new DocumentoClienteService();
+
+        this.honorarioService = new HonorarioService();
+        this.gastoService = new GastoService();
+        this.pagoService = new PagoService();
 
         this.listaExpedientes = FXCollections.observableArrayList();
         this.listaClientes = FXCollections.observableArrayList();
@@ -112,6 +134,12 @@ public class MainController {
     }
 
     private HBox crearBarraSuperior() {
+        // Badge de notificaciones
+        Label lblBadgeNotif = new Label();
+        lblBadgeNotif.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; " +
+                "-fx-padding: 5 10; -fx-background-radius: 15; -fx-font-weight: bold;");
+        lblBadgeNotif.setVisible(false);
+
         HBox barra = new HBox(15);
         barra.setPadding(new Insets(10));
         barra.setAlignment(Pos.CENTER_LEFT);
@@ -119,6 +147,31 @@ public class MainController {
 
         Label lblTitulo = new Label("JURIDIX - Gestión de Estudios Jurídicos");
         lblTitulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
+
+
+
+        // ============ BÚSQUEDA GLOBAL (NUEVO) ============
+        TextField txtBusquedaGlobal = new TextField();
+        txtBusquedaGlobal.setPromptText("🔍 Buscar en todo...");
+        txtBusquedaGlobal.setPrefWidth(300);
+        txtBusquedaGlobal.setStyle("-fx-background-radius: 20; -fx-padding: 8;");
+
+        txtBusquedaGlobal.setOnAction(e -> {
+            String busqueda = txtBusquedaGlobal.getText().trim();
+            if (!busqueda.isEmpty()) {
+                mostrarResultadosBusquedaGlobal(busqueda);
+            }
+        });
+
+        Button btnBuscar = new Button("🔍");
+        btnBuscar.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-background-radius: 20;");
+        btnBuscar.setOnAction(e -> {
+            String busqueda = txtBusquedaGlobal.getText().trim();
+            if (!busqueda.isEmpty()) {
+                mostrarResultadosBusquedaGlobal(busqueda);
+            }
+        });
+        // ============ FIN BÚSQUEDA GLOBAL ============
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -130,10 +183,23 @@ public class MainController {
         btnCerrarSesion.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
         btnCerrarSesion.setOnAction(e -> cerrarSesion());
 
-        barra.getChildren().addAll(lblTitulo, spacer, lblUsuario, btnCerrarSesion);
+        //barra.getChildren().addAll(lblTitulo, txtBusquedaGlobal, btnBuscar, spacer, lblUsuario, btnCerrarSesion);
+
+        // Actualizar badge
+        try {
+            Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
+            List<EventoAgenda> eventosHoy = agendaService.listarHoy(usuarioId);
+            if (!eventosHoy.isEmpty()) {
+                lblBadgeNotif.setText("🔔 " + eventosHoy.size());
+                lblBadgeNotif.setVisible(true);
+            }
+        } catch (SQLException e) {
+            // Ignorar
+        }
+
+        barra.getChildren().addAll(lblTitulo, lblBadgeNotif, txtBusquedaGlobal, btnBuscar, spacer, lblUsuario, btnCerrarSesion);
         return barra;
     }
-
     private VBox crearPanelPrincipal() {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(10));
@@ -160,11 +226,17 @@ public class MainController {
         tabAgenda.setClosable(false);
         tabAgenda.setContent(crearPanelAgenda());
 
-        // IMPORTANTE: Agregar TODAS las pestañas
-        tabPane.getTabs().addAll(tabDashboard, tabExpedientes, tabClientes, tabAgenda);
+
 
         panel.getChildren().add(tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
+
+        // Pestaña Economía (NUEVA)
+        Tab tabEconomia = new Tab("💰 Economía");
+        tabEconomia.setClosable(false);
+        tabEconomia.setContent(crearPanelEconomia());
+
+        tabPane.getTabs().addAll(tabDashboard, tabExpedientes, tabClientes, tabAgenda, tabEconomia);
 
         return panel;
     }
@@ -244,10 +316,15 @@ public class MainController {
 
         tarjetas.getChildren().addAll(tarjetaExpedientes, tarjetaActivos, tarjetaEventosHoy, tarjetaEventosSemana);
 
-        // Panel de próximos eventos
+        // Panel de próximos eventos Y notificaciones
+        HBox panelInferior = new HBox(15);
+        panelInferior.setAlignment(Pos.TOP_CENTER);
+
+// Panel izquierdo: Próximos eventos
         VBox panelEventos = new VBox(10);
         panelEventos.setPadding(new Insets(15));
         panelEventos.setStyle("-fx-background-color: white; -fx-border-color: #bdc3c7; -fx-border-width: 1; -fx-border-radius: 5;");
+        HBox.setHgrow(panelEventos, Priority.ALWAYS);
 
         Label lblProximos = new Label("📅 Próximos Eventos");
         lblProximos.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -260,8 +337,163 @@ public class MainController {
 
         panelEventos.getChildren().addAll(lblProximos, listProximosEventos, btnActualizarDashboard);
 
-        panel.getChildren().addAll(titulo, tarjetas, panelEventos);
+// Panel derecho: Notificaciones y alertas
+        VBox panelNotificaciones = crearPanelNotificaciones();
+        HBox.setHgrow(panelNotificaciones, Priority.ALWAYS);
+
+        panelInferior.getChildren().addAll(panelEventos, panelNotificaciones);
+
+        panel.getChildren().addAll(titulo, tarjetas, panelInferior);
         return panel;
+    }
+
+    // ==================== BÚSQUEDA GLOBAL ====================
+
+    private void mostrarResultadosBusquedaGlobal(String busqueda) {
+        Stage ventana = new Stage();
+        ventana.initModality(Modality.APPLICATION_MODAL);
+        ventana.setTitle("Resultados de búsqueda: " + busqueda);
+
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+
+        Label lblTitulo = new Label("🔍 Resultados para: \"" + busqueda + "\"");
+        lblTitulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        TabPane tabPane = new TabPane();
+
+        // ========== TAB 1: Clientes ==========
+        Tab tabClientes = new Tab("👥 Clientes");
+        tabClientes.setClosable(false);
+
+        ListView<String> listClientes = new ListView<>();
+        ObservableList<String> resultadosClientes = FXCollections.observableArrayList();
+        listClientes.setItems(resultadosClientes);
+
+        try {
+            List<Cliente> clientes = clienteService.buscarPorCriterios(busqueda, true);
+            if (clientes.isEmpty()) {
+                resultadosClientes.add("No se encontraron clientes");
+            } else {
+                for (Cliente c : clientes) {
+                    resultadosClientes.add(c.getNombreCompleto() +
+                            (c.getDni() != null ? " - DNI: " + c.getDni() : "") +
+                            (c.getTelefono() != null ? " - Tel: " + c.getTelefono() : ""));
+                }
+            }
+        } catch (SQLException e) {
+            resultadosClientes.add("❌ Error al buscar clientes");
+        }
+
+        // Doble clic para ver cliente
+        listClientes.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                String seleccionado = listClientes.getSelectionModel().getSelectedItem();
+                if (seleccionado != null && !seleccionado.startsWith("No se") && !seleccionado.startsWith("❌")) {
+                    try {
+                        // Extraer nombre del cliente
+                        String nombreCliente = seleccionado.split(" - ")[0];
+                        List<Cliente> clientes = clienteService.buscarPorNombre(nombreCliente);
+                        if (!clientes.isEmpty()) {
+                            ventana.close();
+                            abrirVistaDetalladaCliente(clientes.get(0));
+                        }
+                    } catch (SQLException e) {
+                        mostrarError("Error: " + e.getMessage());
+                    }
+                }
+            }
+        });
+
+        tabClientes.setContent(listClientes);
+
+        // ========== TAB 2: Expedientes ==========
+        Tab tabExpedientes = new Tab("📁 Expedientes");
+        tabExpedientes.setClosable(false);
+
+        ListView<String> listExpedientes = new ListView<>();
+        ObservableList<String> resultadosExpedientes = FXCollections.observableArrayList();
+        listExpedientes.setItems(resultadosExpedientes);
+
+        try {
+            List<Expediente> expedientes = expedienteService.buscarPorCriterios(busqueda, busqueda, null, null);
+            if (expedientes.isEmpty()) {
+                resultadosExpedientes.add("No se encontraron expedientes");
+            } else {
+                for (Expediente exp : expedientes) {
+                    resultadosExpedientes.add(exp.getNumero() + " - " + exp.getCaratula() +
+                            " (" + exp.getEstado() + ")");
+                }
+            }
+        } catch (SQLException e) {
+            resultadosExpedientes.add("❌ Error al buscar expedientes");
+        }
+
+        // Doble clic para cargar expediente
+        listExpedientes.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                String seleccionado = listExpedientes.getSelectionModel().getSelectedItem();
+                if (seleccionado != null && !seleccionado.startsWith("No se") && !seleccionado.startsWith("❌")) {
+                    try {
+                        String numero = seleccionado.split(" - ")[0];
+                        List<Expediente> expedientes = expedienteService.buscarPorCriterios(numero, null, null, null);
+                        if (!expedientes.isEmpty()) {
+                            ventana.close();
+                            cargarExpedienteEnFormulario(expedientes.get(0));
+                            mostrarInfo("Expediente cargado en el formulario");
+                        }
+                    } catch (SQLException e) {
+                        mostrarError("Error: " + e.getMessage());
+                    }
+                }
+            }
+        });
+
+        tabExpedientes.setContent(listExpedientes);
+
+        // ========== TAB 3: Agenda ==========
+        Tab tabAgenda = new Tab("📅 Eventos");
+        tabAgenda.setClosable(false);
+
+        ListView<String> listEventos = new ListView<>();
+        ObservableList<String> resultadosEventos = FXCollections.observableArrayList();
+        listEventos.setItems(resultadosEventos);
+
+        try {
+            Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
+            List<EventoAgenda> eventos = agendaService.listarPorUsuario(usuarioId);
+
+            List<EventoAgenda> eventosCoincidentes = eventos.stream()
+                    .filter(e -> e.getTitulo().toLowerCase().contains(busqueda.toLowerCase()) ||
+                            (e.getDescripcion() != null && e.getDescripcion().toLowerCase().contains(busqueda.toLowerCase())))
+                    .toList();
+
+            if (eventosCoincidentes.isEmpty()) {
+                resultadosEventos.add("No se encontraron eventos");
+            } else {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+                for (EventoAgenda evento : eventosCoincidentes) {
+                    resultadosEventos.add(evento.getFechaHora().format(formatter) + " - " +
+                            evento.getTitulo() + " (" + evento.getTipo() + ")");
+                }
+            }
+        } catch (SQLException e) {
+            resultadosEventos.add("❌ Error al buscar eventos");
+        }
+
+        tabAgenda.setContent(listEventos);
+
+        tabPane.getTabs().addAll(tabClientes, tabExpedientes, tabAgenda);
+
+        Button btnCerrar = new Button("❌ Cerrar");
+        btnCerrar.setOnAction(e -> ventana.close());
+
+        root.getChildren().addAll(lblTitulo, tabPane, btnCerrar);
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
+
+        Scene scene = new Scene(root, 700, 500);
+        ventana.setScene(scene);
+        ventana.show();
     }
 
     private VBox crearTarjetaEstadistica(String titulo, String valorInicial, String color) {
@@ -284,6 +516,49 @@ public class MainController {
         contenedor.getChildren().addAll(lblTitulo, valorBox);
 
         return contenedor;
+    }
+
+    private VBox crearPanelNotificaciones() {
+        VBox panel = new VBox(10);
+        panel.setPadding(new Insets(15));
+        panel.setStyle("-fx-background-color: white; -fx-border-color: #bdc3c7; -fx-border-width: 1; -fx-border-radius: 5;");
+
+        Label lblTitulo = new Label("🔔 Notificaciones y Alertas");
+        lblTitulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+        listNotificaciones = new ListView<>();
+        listNotificaciones.setPrefHeight(200);
+        listNotificaciones.setCellFactory(lv -> new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+
+                    // Colorear según tipo
+                    if (item.contains("⚠️") || item.contains("🔴")) {
+                        setStyle("-fx-background-color: #ffe6e6; -fx-font-weight: bold;");
+                    } else if (item.contains("📅") || item.contains("🟡")) {
+                        setStyle("-fx-background-color: #fff9e6;");
+                    } else if (item.contains("✅")) {
+                        setStyle("-fx-background-color: #e6ffe6;");
+                    } else if (item.startsWith("   ")) {
+                        setStyle("-fx-padding: 2 2 2 20;"); // Indentar items
+                    }
+                }
+            }
+        });
+        // Cargar notificaciones iniciales
+        actualizarNotificaciones();
+
+        Button btnActualizar = new Button("🔄 Actualizar");
+        btnActualizar.setOnAction(e -> actualizarNotificaciones());
+
+        panel.getChildren().addAll(lblTitulo, listNotificaciones, btnActualizar);
+        return panel;
     }
 
     private void cargarDashboard() {
@@ -328,6 +603,103 @@ public class MainController {
         }
     }
 
+    private void actualizarNotificaciones() {
+        ObservableList<String> notificaciones = FXCollections.observableArrayList();
+
+        try {
+            Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
+            LocalDate hoy = LocalDate.now();
+            LocalDate manana = hoy.plusDays(1);
+
+            // ========== EVENTOS DE HOY ==========
+            List<EventoAgenda> eventosHoy = agendaService.listarPorFecha(hoy).stream()
+                    .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
+                    .toList();
+
+            if (!eventosHoy.isEmpty()) {
+                notificaciones.add("⚠️ HOY - " + eventosHoy.size() + " evento(s) pendiente(s)");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+                for (EventoAgenda evento : eventosHoy) {
+                    String icono = switch (evento.getTipo()) {
+                        case AUDIENCIA -> "⚖️";
+                        case VENCIMIENTO -> "⏰";
+                        case REUNION -> "👥";
+                        case PRESENTACION -> "📝";
+                        default -> "📌";
+                    };
+                    notificaciones.add("   " + icono + " " + evento.getFechaHora().format(formatter) + " - " + evento.getTitulo());
+                }
+                notificaciones.add(""); // Separador
+            }
+
+            // ========== EVENTOS DE MAÑANA ==========
+            List<EventoAgenda> eventosManana = agendaService.listarPorFecha(manana).stream()
+                    .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
+                    .toList();
+
+            if (!eventosManana.isEmpty()) {
+                notificaciones.add("📅 MAÑANA - " + eventosManana.size() + " evento(s)");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+                for (EventoAgenda evento : eventosManana) {
+                    String icono = switch (evento.getTipo()) {
+                        case AUDIENCIA -> "⚖️";
+                        case VENCIMIENTO -> "⏰";
+                        case REUNION -> "👥";
+                        case PRESENTACION -> "📝";
+                        default -> "📌";
+                    };
+                    notificaciones.add("   " + icono + " " + evento.getFechaHora().format(formatter) + " - " + evento.getTitulo());
+                }
+                notificaciones.add(""); // Separador
+            }
+
+            // ========== PRÓXIMOS 7 DÍAS (sin contar hoy y mañana) ==========
+            List<EventoAgenda> proximaSemana = agendaService.listarProximos(usuarioId, 7).stream()
+                    .filter(e -> e.isPendiente() &&
+                            !e.getFechaHora().toLocalDate().equals(hoy) &&
+                            !e.getFechaHora().toLocalDate().equals(manana))
+                    .toList();
+
+            if (!proximaSemana.isEmpty()) {
+                notificaciones.add("📆 PRÓXIMOS 7 DÍAS - " + proximaSemana.size() + " evento(s)");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+                for (EventoAgenda evento : proximaSemana) {
+                    notificaciones.add("   📌 " + evento.getFechaHora().format(formatter) + " - " + evento.getTitulo());
+                }
+            }
+
+            // ========== VENCIMIENTOS PRÓXIMOS ==========
+            List<EventoAgenda> vencimientos = agendaService.listarProximos(usuarioId, 7).stream()
+                    .filter(e -> e.getTipo() == TipoEvento.VENCIMIENTO && e.isPendiente())
+                    .toList();
+
+            if (!vencimientos.isEmpty()) {
+                notificaciones.add(""); // Separador
+                notificaciones.add("⏰ VENCIMIENTOS PRÓXIMOS");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                for (EventoAgenda v : vencimientos) {
+                    long diasRestantes = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), v.getFechaHora().toLocalDate());
+                    String urgencia = diasRestantes <= 1 ? "🔴" : diasRestantes <= 3 ? "🟡" : "🟢";
+                    notificaciones.add("   " + urgencia + " " + v.getFechaHora().toLocalDate().format(formatter) + " - " + v.getTitulo());
+                }
+            }
+
+            // ========== SI NO HAY NADA ==========
+            if (notificaciones.isEmpty()) {
+                notificaciones.add("✅ No hay notificaciones pendientes");
+                notificaciones.add("");
+                notificaciones.add("¡Todo al día! 🎉");
+            }
+
+        } catch (SQLException e) {
+            notificaciones.add("❌ Error al cargar notificaciones");
+            notificaciones.add("Detalles: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        listNotificaciones.setItems(notificaciones);
+    }
+
     // ==================== EXPEDIENTES ====================
 
     private SplitPane crearPanelExpedientes() {
@@ -352,7 +724,40 @@ public class MainController {
 
         txtNumero = new TextField();
         txtCaratula = new TextField();
+
+        // ============ NUEVO: ComboBox de clientes ============
+        ComboBox<Cliente> cmbClientes = new ComboBox<>();
+        cmbClientes.setPromptText("Seleccione un cliente...");
+        cmbClientes.setMaxWidth(Double.MAX_VALUE);
+
+        // Botón para crear cliente rápido
+        Button btnNuevoClienteRapido = new Button("➕");
+        btnNuevoClienteRapido.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+        btnNuevoClienteRapido.setOnAction(e -> {
+            abrirFormularioCliente(null);
+            // Recargar combo después de crear cliente
+            cargarComboClientes(cmbClientes);
+        });
+
+        HBox clienteBox = new HBox(5, cmbClientes, btnNuevoClienteRapido);
+        HBox.setHgrow(cmbClientes, Priority.ALWAYS);
+
         txtCliente = new TextField();
+        txtCliente.setEditable(false);
+        txtCliente.setStyle("-fx-background-color: #e8e8e8;");
+
+        // Cuando selecciona un cliente del combo
+        cmbClientes.setOnAction(e -> {
+            Cliente clienteSel = cmbClientes.getValue();
+            if (clienteSel != null) {
+                txtCliente.setText(clienteSel.getNombreCompleto());
+            }
+        });
+
+        // Cargar clientes en el combo
+        cargarComboClientes(cmbClientes);
+        // ============ FIN NUEVO ============
+
         txtDemandado = new TextField();
 
         cmbFuero = new ComboBox<>();
@@ -382,6 +787,7 @@ public class MainController {
                 new Separator(),
                 new Label("Número *:"), txtNumero,
                 new Label("Carátula *:"), txtCaratula,
+                new Label("Seleccionar Cliente:"), clienteBox,
                 new Label("Cliente *:"), txtCliente,
                 new Label("Demandado:"), txtDemandado,
                 new Label("Fuero:"), cmbFuero,
@@ -391,7 +797,7 @@ public class MainController {
                 new Label("Fecha Inicio *:"), dpFechaInicio,
                 new Label("Monto Estimado:"), txtMontoEstimado,
                 new Label("Observaciones:"), txtObservaciones,
-                crearBotonesFormularioExpediente()
+                crearBotonesFormularioExpediente(cmbClientes)
         );
 
         ScrollPane scroll = new ScrollPane(form);
@@ -403,14 +809,23 @@ public class MainController {
         return container;
     }
 
-    private HBox crearBotonesFormularioExpediente() {
+    // Método auxiliar para cargar clientes en el combo
+    private void cargarComboClientes(ComboBox<Cliente> combo) {
+        try {
+            List<Cliente> clientes = clienteService.listarActivos();
+            combo.setItems(FXCollections.observableArrayList(clientes));
+        } catch (SQLException e) {
+            System.err.println("Error al cargar clientes: " + e.getMessage());
+        }
+    }
+    private HBox crearBotonesFormularioExpediente(ComboBox<Cliente> cmbClientes) {
         HBox botones = new HBox(10);
         botones.setAlignment(Pos.CENTER);
         botones.setPadding(new Insets(10, 0, 0, 0));
 
         Button btnGuardar = new Button("💾 Guardar");
         btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
-        btnGuardar.setOnAction(e -> guardarExpediente());
+        btnGuardar.setOnAction(e -> guardarExpedienteConCliente(cmbClientes));
 
         Button btnNuevo = new Button("📄 Nuevo");
         btnNuevo.setOnAction(e -> limpiarFormularioExpediente());
@@ -425,6 +840,70 @@ public class MainController {
 
         botones.getChildren().addAll(btnGuardar, btnNuevo, btnEliminar, btnMovimientos);
         return botones;
+    }
+
+    // Nuevo método para guardar con cliente vinculado
+    private void guardarExpedienteConCliente(ComboBox<Cliente> cmbClientes) {
+        try {
+            if (!validarCamposExpediente()) {
+                return;
+            }
+
+            Expediente expediente;
+
+            if (expedienteSeleccionado != null && expedienteSeleccionado.getId() != null) {
+                expediente = expedienteSeleccionado;
+            } else {
+                expediente = new Expediente();
+                expediente.setCreadorId(SesionUsuario.getUsuarioActual().getId());
+            }
+
+            expediente.setNumero(txtNumero.getText().trim().toUpperCase());
+            expediente.setCaratula(txtCaratula.getText().trim());
+            expediente.setCliente(txtCliente.getText().trim());
+            expediente.setDemandado(txtDemandado.getText().trim());
+            expediente.setFuero(cmbFuero.getValue());
+            expediente.setJuzgado(txtJuzgado.getText().trim());
+            expediente.setSecretaria(txtSecretaria.getText().trim());
+            expediente.setEstado(cmbEstado.getValue());
+            expediente.setFechaInicio(dpFechaInicio.getValue());
+
+            // ============ VINCULAR CLIENTE ============
+            Cliente clienteSeleccionado = cmbClientes.getValue();
+            if (clienteSeleccionado != null) {
+                expediente.setClienteId(clienteSeleccionado.getId());
+            }
+            // ============ FIN VINCULAR ============
+
+            if (!txtMontoEstimado.getText().trim().isEmpty()) {
+                try {
+                    expediente.setMontoEstimado(Double.parseDouble(txtMontoEstimado.getText().trim()));
+                } catch (NumberFormatException ex) {
+                    mostrarError("El monto estimado debe ser un número válido");
+                    return;
+                }
+            }
+
+            expediente.setObservaciones(txtObservaciones.getText().trim());
+
+            if (expediente.getId() == null) {
+                expedienteService.crearExpediente(expediente);
+                mostrarInfo("Expediente creado correctamente");
+            } else {
+                expedienteService.actualizarExpediente(expediente);
+                mostrarInfo("Expediente actualizado correctamente");
+            }
+
+            limpiarFormularioExpediente();
+            cargarExpedientes();
+            cargarDashboard();
+
+        } catch (IllegalArgumentException ex) {
+            mostrarAdvertencia(ex.getMessage());
+        } catch (SQLException ex) {
+            mostrarError("Error de base de datos: " + ex.getMessage());
+            ex.printStackTrace();
+        }
     }
 
     private VBox crearPanelTablaExpedientes() {
@@ -453,7 +932,14 @@ public class MainController {
             cargarExpedientes();
         });
 
-        panelBusqueda.getChildren().addAll(lblBuscar, txtBuscar, lblFiltro, cmbFiltroEstado, btnLimpiarFiltro);
+        Button btnExportarExp = new Button("📊 Exportar Excel");
+        btnExportarExp.setStyle("-fx-background-color: #16a085; -fx-text-fill: white;");
+        btnExportarExp.setOnAction(e -> exportarExpedientesExcel());
+
+        panelBusqueda.getChildren().addAll(lblBuscar, txtBuscar, lblFiltro, cmbFiltroEstado,
+                btnLimpiarFiltro, btnExportarExp);
+
+        //panelBusqueda.getChildren().addAll(lblBuscar, txtBuscar, lblFiltro, cmbFiltroEstado, btnLimpiarFiltro);
 
         tablaExpedientes = new TableView<>();
         tablaExpedientes.setItems(listaExpedientes);
@@ -877,6 +1363,7 @@ public class MainController {
         }
 
         cargarDashboard(); // Actualizar también el dashboard
+        actualizarNotificaciones();
     }
 
     @SuppressWarnings("unchecked")
@@ -1278,7 +1765,15 @@ public class MainController {
         Button btnActualizar = new Button("🔄 Actualizar");
         btnActualizar.setOnAction(e -> cargarClientes());
 
-        barraControl.getChildren().addAll(lblBuscar, txtBuscarCliente, btnNuevoCliente, btnActualizar);
+        Button btnExportar = new Button("📊 Exportar Excel");
+        btnExportar.setStyle("-fx-background-color: #16a085; -fx-text-fill: white;");
+        btnExportar.setOnAction(e -> exportarClientesExcel());
+
+// Agregar a barraControl
+        barraControl.getChildren().addAll(lblBuscar, txtBuscarCliente, btnNuevoCliente,
+                btnActualizar, btnExportar);
+
+        //barraControl.getChildren().addAll(lblBuscar, txtBuscarCliente, btnNuevoCliente, btnActualizar);
 
         // Tabla de clientes
         tablaClientes = new TableView<>();
@@ -1334,6 +1829,13 @@ public class MainController {
     private void mostrarError(String mensaje) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Error");
+        alert.setHeaderText(null);
+        alert.setContentText(mensaje);
+        alert.showAndWait();
+    }
+    private void mostrarExito(String mensaje) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Éxito");
         alert.setHeaderText(null);
         alert.setContentText(mensaje);
         alert.showAndWait();
@@ -1986,4 +2488,1215 @@ public class MainController {
         ventana.setScene(scene);
         ventana.showAndWait();
     }
+    // ==================== EXPORTACIÓN DE REPORTES ====================
+
+    private void exportarClientesExcel() {
+        try {
+            List<Cliente> clientes = clienteService.listarTodos();
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Guardar Excel");
+            fileChooser.setInitialFileName("clientes_" + LocalDate.now() + ".csv");
+            fileChooser.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("CSV", "*.csv")
+            );
+
+            File file = fileChooser.showSaveDialog(stage);
+            if (file != null) {
+                StringBuilder csv = new StringBuilder();
+                csv.append("Nombre,DNI,CUIT,Teléfono,Email,Domicilio,Activo\n");
+
+                for (Cliente c : clientes) {
+                    csv.append(escapeCsv(c.getNombreCompleto())).append(",");
+                    csv.append(escapeCsv(c.getDni())).append(",");
+                    csv.append(escapeCsv(c.getCuitCuil())).append(",");
+                    csv.append(escapeCsv(c.getTelefono())).append(",");
+                    csv.append(escapeCsv(c.getEmail())).append(",");
+                    csv.append(escapeCsv(c.getDomicilioCompleto())).append(",");
+                    csv.append(c.isActivo() ? "Sí" : "No").append("\n");
+                }
+
+                java.nio.file.Files.writeString(file.toPath(), csv.toString());
+                mostrarInfo("Excel exportado correctamente");
+
+                // Abrir el archivo
+                if (java.awt.Desktop.isDesktopSupported()) {
+                    java.awt.Desktop.getDesktop().open(file);
+                }
+            }
+
+        } catch (Exception e) {
+            mostrarError("Error al exportar: " + e.getMessage());
+        }
+    }
+
+    private void exportarExpedientesExcel() {
+        try {
+            List<Expediente> expedientes = expedienteService.listarTodos();
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Guardar Excel");
+            fileChooser.setInitialFileName("expedientes_" + LocalDate.now() + ".csv");
+            fileChooser.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("CSV", "*.csv")
+            );
+
+            File file = fileChooser.showSaveDialog(stage);
+            if (file != null) {
+                StringBuilder csv = new StringBuilder();
+                csv.append("Número,Carátula,Cliente,Demandado,Fuero,Juzgado,Estado,Fecha Inicio\n");
+
+                for (Expediente exp : expedientes) {
+                    csv.append(escapeCsv(exp.getNumero())).append(",");
+                    csv.append(escapeCsv(exp.getCaratula())).append(",");
+                    csv.append(escapeCsv(exp.getCliente())).append(",");
+                    csv.append(escapeCsv(exp.getDemandado())).append(",");
+                    csv.append(escapeCsv(exp.getFuero())).append(",");
+                    csv.append(escapeCsv(exp.getJuzgado())).append(",");
+                    csv.append(exp.getEstado()).append(",");
+                    csv.append(exp.getFechaInicio()).append("\n");
+                }
+
+                java.nio.file.Files.writeString(file.toPath(), csv.toString());
+                mostrarInfo("Excel exportado correctamente");
+
+                if (java.awt.Desktop.isDesktopSupported()) {
+                    java.awt.Desktop.getDesktop().open(file);
+                }
+            }
+
+        } catch (Exception e) {
+            mostrarError("Error al exportar: " + e.getMessage());
+        }
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) return "";
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    // ==================== PANEL DE HERRAMIENTAS ====================
+
+    private VBox crearPanelHerramientas() {
+        VBox panel = new VBox(20);
+        panel.setPadding(new Insets(20));
+
+        Label titulo = new Label("🛠️ Herramientas Jurídicas");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        // ========== CALCULADORA DE PLAZOS ==========
+        VBox calculadoraPlazos = new VBox(15);
+        calculadoraPlazos.setPadding(new Insets(20));
+        calculadoraPlazos.setStyle("-fx-background-color: white; -fx-border-color: #3498db; -fx-border-width: 2; -fx-border-radius: 10;");
+
+        Label lblTituloCalc = new Label("⚖️ Calculadora de Plazos Procesales");
+        lblTituloCalc.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+        GridPane gridCalc = new GridPane();
+        gridCalc.setHgap(15);
+        gridCalc.setVgap(10);
+
+        Label lblFechaInicio = new Label("Fecha de inicio:");
+        DatePicker dpFechaInicioPlazo = new DatePicker(LocalDate.now());
+
+        Label lblDias = new Label("Cantidad de días:");
+        Spinner<Integer> spDias = new Spinner<>(1, 365, 10);
+        spDias.setEditable(true);
+
+        Label lblTipoDias = new Label("Tipo de días:");
+        ComboBox<String> cmbTipoDias = new ComboBox<>();
+        cmbTipoDias.setItems(FXCollections.observableArrayList("Días hábiles", "Días corridos"));
+        cmbTipoDias.setValue("Días hábiles");
+        cmbTipoDias.setMaxWidth(Double.MAX_VALUE);
+
+        Label lblResultado = new Label("Resultado:");
+        TextField txtResultadoPlazo = new TextField();
+        txtResultadoPlazo.setEditable(false);
+        txtResultadoPlazo.setStyle("-fx-background-color: #ecf0f1; -fx-font-weight: bold; -fx-font-size: 14px;");
+
+        Button btnCalcular = new Button("🔢 Calcular Plazo");
+        btnCalcular.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnCalcular.setOnAction(e -> {
+            LocalDate fechaInicio = dpFechaInicioPlazo.getValue();
+            int dias = spDias.getValue();
+            boolean esHabiles = cmbTipoDias.getValue().equals("Días hábiles");
+
+            LocalDate fechaFin = calcularPlazo(fechaInicio, dias, esHabiles);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy (EEEE)",
+                    new java.util.Locale("es", "AR"));
+            txtResultadoPlazo.setText(fechaFin.format(formatter));
+        });
+
+        Button btnAgregarAgenda = new Button("📅 Agregar a Agenda");
+        btnAgregarAgenda.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+        btnAgregarAgenda.setOnAction(e -> {
+            String resultado = txtResultadoPlazo.getText();
+            if (!resultado.isEmpty()) {
+                // Pre-cargar evento en agenda
+                EventoAgenda evento = new EventoAgenda();
+                evento.setTitulo("Vencimiento de plazo");
+                evento.setTipo(TipoEvento.VENCIMIENTO);
+
+                // Parsear fecha del resultado
+                String fechaStr = resultado.split(" ")[0]; // Obtener solo la fecha
+                LocalDate fecha = LocalDate.parse(fechaStr, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                evento.setFechaHora(LocalDateTime.of(fecha, LocalTime.of(9, 0)));
+                evento.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+
+                try {
+                    agendaService.crearEvento(evento);
+                    mostrarInfo("Vencimiento agregado a la agenda");
+                    actualizarNotificaciones(); // ← AGREGAR ESTA LÍNEA
+                    cargarDashboard();
+                } catch (SQLException ex) {
+                    mostrarError("Error al agregar a agenda: " + ex.getMessage());
+                }
+            } else {
+                mostrarAdvertencia("Primero calcule el plazo");
+            }
+        });
+
+        gridCalc.add(lblFechaInicio, 0, 0);
+        gridCalc.add(dpFechaInicioPlazo, 1, 0);
+        gridCalc.add(lblDias, 0, 1);
+        gridCalc.add(spDias, 1, 1);
+        gridCalc.add(lblTipoDias, 0, 2);
+        gridCalc.add(cmbTipoDias, 1, 2);
+        gridCalc.add(lblResultado, 0, 3);
+        gridCalc.add(txtResultadoPlazo, 1, 3);
+
+        HBox botonesCalc = new HBox(10, btnCalcular, btnAgregarAgenda);
+        botonesCalc.setAlignment(Pos.CENTER);
+
+        calculadoraPlazos.getChildren().addAll(lblTituloCalc, gridCalc, botonesCalc);
+
+        // ========== OTRAS HERRAMIENTAS ==========
+        HBox herramientasRapidas = new HBox(15);
+        herramientasRapidas.setAlignment(Pos.CENTER);
+
+        Button btnExportarTodo = new Button("📊 Exportar Todo a Excel");
+        btnExportarTodo.setStyle("-fx-background-color: #16a085; -fx-text-fill: white; -fx-font-size: 14px; -fx-padding: 15;");
+        btnExportarTodo.setOnAction(e -> {
+            exportarClientesExcel();
+            exportarExpedientesExcel();
+            mostrarInfo("Datos exportados correctamente");
+        });
+
+        Button btnBackup = new Button("💾 Crear Backup de BD");
+        btnBackup.setStyle("-fx-background-color: #8e44ad; -fx-text-fill: white; -fx-font-size: 14px; -fx-padding: 15;");
+        btnBackup.setOnAction(e -> crearBackupBaseDatos());
+
+        herramientasRapidas.getChildren().addAll(btnExportarTodo, btnBackup);
+
+        panel.getChildren().addAll(titulo, calculadoraPlazos, new Separator(), herramientasRapidas);
+        return panel;
+    }
+
+    // Método para calcular plazos
+    private LocalDate calcularPlazo(LocalDate fechaInicio, int dias, boolean esHabiles) {
+        if (!esHabiles) {
+            return fechaInicio.plusDays(dias);
+        }
+
+        // Calcular días hábiles (lunes a viernes)
+        LocalDate fecha = fechaInicio;
+        int diasContados = 0;
+
+        while (diasContados < dias) {
+            fecha = fecha.plusDays(1);
+
+            // Si no es sábado ni domingo
+            if (fecha.getDayOfWeek() != java.time.DayOfWeek.SATURDAY &&
+                    fecha.getDayOfWeek() != java.time.DayOfWeek.SUNDAY) {
+                diasContados++;
+            }
+        }
+
+        return fecha;
+    }
+
+    // Método para crear backup
+    private void crearBackupBaseDatos() {
+        try {
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Guardar Backup");
+            fileChooser.setInitialFileName("juridix_backup_" + LocalDate.now() + ".db");
+            fileChooser.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("Base de Datos SQLite", "*.db")
+            );
+
+            File destino = fileChooser.showSaveDialog(stage);
+            if (destino != null) {
+                File origen = new File("juridix.db");
+                java.nio.file.Files.copy(origen.toPath(), destino.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                mostrarInfo("Backup creado correctamente en:\n" + destino.getAbsolutePath());
+            }
+
+        } catch (Exception e) {
+            mostrarError("Error al crear backup: " + e.getMessage());
+        }
+    }
+
+    // ==================== PANEL DE ECONOMÍA ====================
+
+    private VBox crearPanelEconomia() {
+        VBox panel = new VBox(20);
+        panel.setPadding(new Insets(20));
+
+        Label titulo = new Label("💰 Gestión Económica");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        // ========== RESUMEN FINANCIERO ==========
+        HBox resumenFinanciero = new HBox(20);
+        resumenFinanciero.setAlignment(Pos.CENTER);
+
+        try {
+            // Calcular totales globales
+            double totalHonorariosPendientes = calcularTotalHonorariosPendientes();
+            double totalGastos = calcularTotalGastos();
+            double totalPagos = calcularTotalPagos();
+            double saldoPendiente = totalHonorariosPendientes - totalPagos;
+
+            VBox tarjetaHonorarios = crearTarjetaFinanciera("Honorarios Pendientes",
+                    String.format("$%.2f", totalHonorariosPendientes), "#3498db");
+
+            VBox tarjetaGastos = crearTarjetaFinanciera("Total Gastos",
+                    String.format("$%.2f", totalGastos), "#e74c3c");
+
+            VBox tarjetaPagos = crearTarjetaFinanciera("Pagos Recibidos",
+                    String.format("$%.2f", totalPagos), "#27ae60");
+
+            VBox tarjetaSaldo = crearTarjetaFinanciera("Saldo Pendiente",
+                    String.format("$%.2f", saldoPendiente), "#f39c12");
+
+            resumenFinanciero.getChildren().addAll(tarjetaHonorarios, tarjetaGastos, tarjetaPagos, tarjetaSaldo);
+
+        } catch (SQLException e) {
+            Label lblError = new Label("Error al cargar resumen financiero: " + e.getMessage());
+            lblError.setStyle("-fx-text-fill: red;");
+            resumenFinanciero.getChildren().add(lblError);
+        }
+
+        // ========== SELECTOR DE EXPEDIENTE ==========
+        HBox selectorExpediente = new HBox(10);
+        selectorExpediente.setAlignment(Pos.CENTER_LEFT);
+
+        Label lblSeleccionar = new Label("Seleccione un expediente:");
+        lblSeleccionar.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+        ComboBox<Expediente> cmbExpedientes = new ComboBox<>();
+        cmbExpedientes.setPromptText("Seleccione expediente...");
+        cmbExpedientes.setPrefWidth(400);
+
+        try {
+            List<Expediente> expedientes = expedienteService.listarActivos();
+            cmbExpedientes.setItems(FXCollections.observableArrayList(expedientes));
+        } catch (SQLException e) {
+            mostrarError("Error al cargar expedientes: " + e.getMessage());
+        }
+
+        selectorExpediente.getChildren().addAll(lblSeleccionar, cmbExpedientes);
+
+        // ========== PESTAÑAS DE GESTIÓN ==========
+        TabPane tabPaneEconomia = new TabPane();
+
+        // Tab Honorarios
+        Tab tabHonorarios = new Tab("💵 Honorarios");
+        tabHonorarios.setClosable(false);
+        VBox panelHonorarios = crearPanelHonorarios(cmbExpedientes);
+        tabHonorarios.setContent(panelHonorarios);
+
+        // Tab Gastos
+        Tab tabGastos = new Tab("💸 Gastos");
+        tabGastos.setClosable(false);
+        VBox panelGastos = crearPanelGastos(cmbExpedientes);
+        tabGastos.setContent(panelGastos);
+
+        // Tab Pagos
+        Tab tabPagos = new Tab("💳 Pagos");
+        tabPagos.setClosable(false);
+        VBox panelPagos = crearPanelPagos(cmbExpedientes);
+        tabPagos.setContent(panelPagos);
+
+        // Tab Cuenta Corriente
+        Tab tabCuentaCorriente = new Tab("📊 Cuenta Corriente");
+        tabCuentaCorriente.setClosable(false);
+        VBox panelCuentaCorriente = crearPanelCuentaCorriente(cmbExpedientes);
+        tabCuentaCorriente.setContent(panelCuentaCorriente);
+
+        tabPaneEconomia.getTabs().addAll(tabHonorarios, tabGastos, tabPagos, tabCuentaCorriente);
+
+        panel.getChildren().addAll(titulo, resumenFinanciero, new Separator(), selectorExpediente, tabPaneEconomia);
+        VBox.setVgrow(tabPaneEconomia, Priority.ALWAYS);
+
+        return panel;
+    }
+
+    // Tarjeta financiera
+    private VBox crearTarjetaFinanciera(String titulo, String valor, String color) {
+        VBox tarjeta = new VBox(10);
+        tarjeta.setAlignment(Pos.CENTER);
+        tarjeta.setPadding(new Insets(20));
+        tarjeta.setStyle("-fx-background-color: white; -fx-border-color: " + color +
+                "; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        tarjeta.setPrefSize(220, 120);
+
+        Label lblTitulo = new Label(titulo);
+        lblTitulo.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+
+        Label lblValor = new Label(valor);
+        lblValor.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+
+        tarjeta.getChildren().addAll(lblTitulo, lblValor);
+        return tarjeta;
+    }
+
+    private VBox crearPanelHonorarios(ComboBox<Expediente> cmbExpedientes) {
+        VBox panel = new VBox(15);
+        panel.setPadding(new Insets(15));
+
+        // Botón nuevo honorario
+        Button btnNuevo = new Button("➕ Nuevo Honorario");
+        btnNuevo.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevo.setOnAction(e -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                abrirFormularioHonorario(null, exp.getId());
+            } else {
+                mostrarAdvertencia("Seleccione un expediente primero");
+            }
+        });
+
+        // Tabla de honorarios
+        TableView<Honorario> tablaHonorarios = new TableView<>();
+        ObservableList<Honorario> listaHonorarios = FXCollections.observableArrayList();
+        tablaHonorarios.setItems(listaHonorarios);
+
+        TableColumn<Honorario, TipoHonorario> colTipo = new TableColumn<>("Tipo");
+        colTipo.setCellValueFactory(new PropertyValueFactory<>("tipo"));
+        colTipo.setPrefWidth(200);
+
+        TableColumn<Honorario, String> colMonto = new TableColumn<>("Monto");
+        colMonto.setCellValueFactory(cellData ->
+                new javafx.beans.property.SimpleStringProperty(cellData.getValue().getMontoFormateado()));
+        colMonto.setPrefWidth(150);
+
+        TableColumn<Honorario, EstadoHonorario> colEstado = new TableColumn<>("Estado");
+        colEstado.setCellValueFactory(new PropertyValueFactory<>("estado"));
+        colEstado.setPrefWidth(150);
+
+        TableColumn<Honorario, LocalDate> colFechaEstimada = new TableColumn<>("Fecha Estimada");
+        colFechaEstimada.setCellValueFactory(new PropertyValueFactory<>("fechaEstimada"));
+        colFechaEstimada.setPrefWidth(150);
+
+        TableColumn<Honorario, String> colDescripcion = new TableColumn<>("Descripción");
+        colDescripcion.setCellValueFactory(new PropertyValueFactory<>("descripcion"));
+        colDescripcion.setPrefWidth(200);
+
+        // Columna acciones
+        TableColumn<Honorario, Void> colAcciones = new TableColumn<>("Acciones");
+        colAcciones.setPrefWidth(180);
+        colAcciones.setCellFactory(param -> new TableCell<>() {
+            private final Button btnEditar = new Button("✏️");
+            private final Button btnCobrar = new Button("💰 Cobrar");
+            private final Button btnEliminar = new Button("🗑️");
+
+            {
+                btnEditar.setOnAction(e -> {
+                    Honorario h = getTableView().getItems().get(getIndex());
+                    abrirFormularioHonorario(h, h.getExpedienteId());
+                });
+
+                btnCobrar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+                btnCobrar.setOnAction(e -> {
+                    Honorario h = getTableView().getItems().get(getIndex());
+                    try {
+                        honorarioService.marcarComoCobrado(h.getId());
+                        mostrarInfo("Honorario marcado como cobrado");
+                        cargarHonorariosPorExpediente(cmbExpedientes.getValue().getId(), listaHonorarios);
+                    } catch (SQLException ex) {
+                        mostrarError("Error: " + ex.getMessage());
+                    }
+                });
+
+                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.setOnAction(e -> {
+                    Honorario h = getTableView().getItems().get(getIndex());
+                    if (mostrarConfirmacion("¿Eliminar este honorario?")) {
+                        try {
+                            honorarioService.eliminarHonorario(h.getId());
+                            listaHonorarios.remove(h);
+                            mostrarInfo("Honorario eliminado");
+                        } catch (SQLException ex) {
+                            mostrarError("Error: " + ex.getMessage());
+                        }
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    HBox botones = new HBox(5, btnEditar, btnCobrar, btnEliminar);
+                    setGraphic(botones);
+                }
+            }
+        });
+
+        tablaHonorarios.getColumns().addAll(colTipo, colMonto, colEstado, colFechaEstimada, colDescripcion, colAcciones);
+
+        // Listener para cambio de expediente
+        cmbExpedientes.setOnAction(e -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                cargarHonorariosPorExpediente(exp.getId(), listaHonorarios);
+            }
+        });
+
+        panel.getChildren().addAll(btnNuevo, tablaHonorarios);
+        VBox.setVgrow(tablaHonorarios, Priority.ALWAYS);
+
+        return panel;
+    }
+
+    private void cargarHonorariosPorExpediente(Integer expedienteId, ObservableList<Honorario> lista) {
+        try {
+            List<Honorario> honorarios = honorarioService.listarPorExpediente(expedienteId);
+            lista.clear();
+            lista.addAll(honorarios);
+        } catch (SQLException e) {
+            mostrarError("Error al cargar honorarios: " + e.getMessage());
+        }
+    }
+
+    private void abrirFormularioHonorario(Honorario honorario, Integer expedienteId) {
+        Stage ventana = new Stage();
+        ventana.initModality(Modality.APPLICATION_MODAL);
+        ventana.setTitle(honorario == null ? "Nuevo Honorario" : "Editar Honorario");
+
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+
+        ComboBox<TipoHonorario> cmbTipo = new ComboBox<>();
+        cmbTipo.setItems(FXCollections.observableArrayList(TipoHonorario.values()));
+        cmbTipo.setMaxWidth(Double.MAX_VALUE);
+
+        TextField txtPorcentaje = new TextField();
+        txtPorcentaje.setPromptText("Ej: 30");
+
+        TextField txtMontoFijo = new TextField();
+        txtMontoFijo.setPromptText("Ej: 150000");
+
+        TextField txtMontoCalculado = new TextField();
+        txtMontoCalculado.setPromptText("Para regulación judicial o cálculo manual");
+
+        DatePicker dpFechaEstimada = new DatePicker();
+
+        TextArea txtDescripcion = new TextArea();
+        txtDescripcion.setPrefRowCount(3);
+
+        ComboBox<EstadoHonorario> cmbEstado = new ComboBox<>();
+        cmbEstado.setItems(FXCollections.observableArrayList(EstadoHonorario.values()));
+        cmbEstado.setValue(EstadoHonorario.PENDIENTE);
+        cmbEstado.setMaxWidth(Double.MAX_VALUE);
+
+        // Cargar datos si es edición
+        if (honorario != null) {
+            cmbTipo.setValue(honorario.getTipo());
+            if (honorario.getPorcentaje() != null) txtPorcentaje.setText(honorario.getPorcentaje().toString());
+            if (honorario.getMontoFijo() != null) txtMontoFijo.setText(honorario.getMontoFijo().toString());
+            if (honorario.getMontoCalculado() != null) txtMontoCalculado.setText(honorario.getMontoCalculado().toString());
+            dpFechaEstimada.setValue(honorario.getFechaEstimada());
+            txtDescripcion.setText(honorario.getDescripcion());
+            cmbEstado.setValue(honorario.getEstado());
+        }
+
+        // Deshabilitar campos según tipo
+        cmbTipo.setOnAction(e -> {
+            TipoHonorario tipo = cmbTipo.getValue();
+            txtPorcentaje.setDisable(tipo != TipoHonorario.PORCENTAJE);
+            txtMontoFijo.setDisable(tipo != TipoHonorario.MONTO_FIJO);
+            txtMontoCalculado.setDisable(tipo == TipoHonorario.MONTO_FIJO);
+        });
+
+        form.getChildren().addAll(
+                new Label("Tipo de Honorario *:"), cmbTipo,
+                new Label("Porcentaje (%) - Solo si es porcentaje:"), txtPorcentaje,
+                new Label("Monto Fijo ($) - Solo si es monto fijo:"), txtMontoFijo,
+                new Label("Monto Calculado ($):"), txtMontoCalculado,
+                new Label("Fecha Estimada de Cobro:"), dpFechaEstimada,
+                new Label("Descripción:"), txtDescripcion,
+                new Label("Estado:"), cmbEstado
+        );
+
+        HBox botones = new HBox(10);
+        botones.setAlignment(Pos.CENTER);
+
+        Button btnGuardar = new Button("💾 Guardar");
+        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.setOnAction(e -> {
+            try {
+                Honorario h = honorario != null ? honorario : new Honorario();
+                h.setExpedienteId(expedienteId);
+                h.setTipo(cmbTipo.getValue());
+
+                if (!txtPorcentaje.getText().isEmpty()) {
+                    h.setPorcentaje(Double.parseDouble(txtPorcentaje.getText()));
+                }
+
+                if (!txtMontoFijo.getText().isEmpty()) {
+                    h.setMontoFijo(Double.parseDouble(txtMontoFijo.getText()));
+                }
+
+                if (!txtMontoCalculado.getText().isEmpty()) {
+                    h.setMontoCalculado(Double.parseDouble(txtMontoCalculado.getText()));
+                }
+
+                h.setFechaEstimada(dpFechaEstimada.getValue());
+                h.setDescripcion(txtDescripcion.getText());
+                h.setEstado(cmbEstado.getValue());
+                h.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+
+                if (honorario == null) {
+                    honorarioService.crearHonorario(h);
+                    mostrarInfo("Honorario creado correctamente");
+                } else {
+                    honorarioService.actualizarHonorario(h);
+                    mostrarInfo("Honorario actualizado correctamente");
+                }
+
+                ventana.close();
+
+            } catch (NumberFormatException ex) {
+                mostrarError("Los montos deben ser números válidos");
+            } catch (Exception ex) {
+                mostrarError("Error: " + ex.getMessage());
+            }
+        });
+
+        Button btnCancelar = new Button("❌ Cancelar");
+        btnCancelar.setOnAction(e -> ventana.close());
+
+        botones.getChildren().addAll(btnGuardar, btnCancelar);
+        form.getChildren().add(botones);
+
+        Scene scene = new Scene(new ScrollPane(form), 500, 600);
+        ventana.setScene(scene);
+        ventana.showAndWait();
+    }
+
+    private VBox crearPanelGastos(ComboBox<Expediente> cmbExpedientes) {
+        VBox panel = new VBox(15);
+        panel.setPadding(new Insets(15));
+
+        Button btnNuevo = new Button("➕ Nuevo Gasto");
+        btnNuevo.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevo.setOnAction(e -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                abrirFormularioGasto(null, exp.getId());
+            } else {
+                mostrarAdvertencia("Seleccione un expediente primero");
+            }
+        });
+
+        TableView<Gasto> tablaGastos = new TableView<>();
+        ObservableList<Gasto> listaGastos = FXCollections.observableArrayList();
+        tablaGastos.setItems(listaGastos);
+
+        TableColumn<Gasto, LocalDate> colFecha = new TableColumn<>("Fecha");
+        colFecha.setCellValueFactory(new PropertyValueFactory<>("fecha"));
+        colFecha.setPrefWidth(120);
+
+        TableColumn<Gasto, String> colConcepto = new TableColumn<>("Concepto");
+        colConcepto.setCellValueFactory(new PropertyValueFactory<>("concepto"));
+        colConcepto.setPrefWidth(250);
+
+        TableColumn<Gasto, String> colCategoria = new TableColumn<>("Categoría");
+        colCategoria.setCellValueFactory(new PropertyValueFactory<>("categoria"));
+        colCategoria.setPrefWidth(150);
+
+        TableColumn<Gasto, String> colMonto = new TableColumn<>("Monto");
+        colMonto.setCellValueFactory(cellData ->
+                new javafx.beans.property.SimpleStringProperty(cellData.getValue().getMontoFormateado()));
+        colMonto.setPrefWidth(120);
+
+        TableColumn<Gasto, Void> colAcciones = new TableColumn<>("Acciones");
+        colAcciones.setPrefWidth(120);
+        colAcciones.setCellFactory(param -> new TableCell<>() {
+            private final Button btnEditar = new Button("✏️");
+            private final Button btnEliminar = new Button("🗑️");
+
+            {
+                btnEditar.setOnAction(e -> {
+                    Gasto g = getTableView().getItems().get(getIndex());
+                    abrirFormularioGasto(g, g.getExpedienteId());
+                });
+
+                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.setOnAction(e -> {
+                    Gasto g = getTableView().getItems().get(getIndex());
+                    if (mostrarConfirmacion("¿Eliminar este gasto?")) {
+                        try {
+                            gastoService.eliminarGasto(g.getId());
+                            listaGastos.remove(g);
+                            mostrarInfo("Gasto eliminado");
+                        } catch (SQLException ex) {
+                            mostrarError("Error: " + ex.getMessage());
+                        }
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    HBox botones = new HBox(5, btnEditar, btnEliminar);
+                    setGraphic(botones);
+                }
+            }
+        });
+
+        tablaGastos.getColumns().addAll(colFecha, colConcepto, colCategoria, colMonto, colAcciones);
+
+        cmbExpedientes.setOnAction(e -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                cargarGastosPorExpediente(exp.getId(), listaGastos);
+            }
+        });
+
+        panel.getChildren().addAll(btnNuevo, tablaGastos);
+        VBox.setVgrow(tablaGastos, Priority.ALWAYS);
+
+        return panel;
+    }
+
+    private void cargarGastosPorExpediente(Integer expedienteId, ObservableList<Gasto> lista) {
+        try {
+            List<Gasto> gastos = gastoService.listarPorExpediente(expedienteId);
+            lista.clear();
+            lista.addAll(gastos);
+        } catch (SQLException e) {
+            mostrarError("Error al cargar gastos: " + e.getMessage());
+        }
+    }
+
+    private void abrirFormularioGasto(Gasto gasto, Integer expedienteId) {
+        Stage ventana = new Stage();
+        ventana.initModality(Modality.APPLICATION_MODAL);
+        ventana.setTitle(gasto == null ? "Nuevo Gasto" : "Editar Gasto");
+
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+
+        TextField txtConcepto = new TextField();
+        txtConcepto.setPromptText("Ej: Tasa judicial");
+
+        TextField txtMonto = new TextField();
+        txtMonto.setPromptText("Ej: 5000");
+
+        DatePicker dpFecha = new DatePicker(LocalDate.now());
+
+        ComboBox<String> cmbCategoria = new ComboBox<>();
+        cmbCategoria.setItems(FXCollections.observableArrayList(
+                "Tasa judicial", "Pericia", "Traslado", "Fotocopias",
+                "Notificación", "Publicación", "Otro"
+        ));
+        cmbCategoria.setMaxWidth(Double.MAX_VALUE);
+
+        TextField txtComprobante = new TextField();
+        txtComprobante.setPromptText("Número de comprobante");
+
+        TextArea txtObservaciones = new TextArea();
+        txtObservaciones.setPrefRowCount(3);
+
+        if (gasto != null) {
+            txtConcepto.setText(gasto.getConcepto());
+            txtMonto.setText(gasto.getMonto().toString());
+            dpFecha.setValue(gasto.getFecha());
+            cmbCategoria.setValue(gasto.getCategoria());
+            txtComprobante.setText(gasto.getComprobante());
+            txtObservaciones.setText(gasto.getObservaciones());
+        }
+
+        form.getChildren().addAll(
+                new Label("Concepto *:"), txtConcepto,
+                new Label("Monto ($) *:"), txtMonto,
+                new Label("Fecha *:"), dpFecha,
+                new Label("Categoría:"), cmbCategoria,
+                new Label("Comprobante:"), txtComprobante,
+                new Label("Observaciones:"), txtObservaciones
+        );
+
+        HBox botones = new HBox(10);
+        botones.setAlignment(Pos.CENTER);
+
+        Button btnGuardar = new Button("💾 Guardar");
+        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.setOnAction(e -> {
+            try {
+                Gasto g = gasto != null ? gasto : new Gasto();
+                g.setExpedienteId(expedienteId);
+                g.setConcepto(txtConcepto.getText());
+                g.setMonto(Double.parseDouble(txtMonto.getText()));
+                g.setFecha(dpFecha.getValue());
+                g.setCategoria(cmbCategoria.getValue());
+                g.setComprobante(txtComprobante.getText());
+                g.setObservaciones(txtObservaciones.getText());
+                g.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+
+                if (gasto == null) {
+                    gastoService.crearGasto(g);
+                    mostrarInfo("Gasto registrado correctamente");
+                } else {
+                    gastoService.actualizarGasto(g);
+                    mostrarInfo("Gasto actualizado correctamente");
+                }
+
+                ventana.close();
+
+            } catch (NumberFormatException ex) {
+                mostrarError("El monto debe ser un número válido");
+            } catch (Exception ex) {
+                mostrarError("Error: " + ex.getMessage());
+            }
+        });
+
+        Button btnCancelar = new Button("❌ Cancelar");
+        btnCancelar.setOnAction(e -> ventana.close());
+
+        botones.getChildren().addAll(btnGuardar, btnCancelar);
+        form.getChildren().add(botones);
+
+        Scene scene = new Scene(form, 500, 550);
+        ventana.setScene(scene);
+        ventana.showAndWait();
+    }
+
+    // ==================== MÉTODOS DE CÁLCULO GLOBALES ====================
+
+    private double calcularTotalHonorariosPendientes() throws SQLException {
+        List<Honorario> pendientes = honorarioService.listarPendientes();
+        return pendientes.stream()
+                .mapToDouble(h -> h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0)
+                .sum();
+    }
+
+    private double calcularTotalGastos() throws SQLException {
+        // Sumar todos los gastos de todos los expedientes
+        List<Expediente> expedientes = expedienteService.listarActivos();
+        double total = 0.0;
+        for (Expediente exp : expedientes) {
+            Double totalExp = gastoService.calcularTotalPorExpediente(exp.getId());
+            total += (totalExp != null ? totalExp : 0.0);
+        }
+        return total;
+    }
+
+    private double calcularTotalPagos() throws SQLException {
+        // Sumar todos los pagos de todos los expedientes
+        List<Expediente> expedientes = expedienteService.listarActivos();
+        double total = 0.0;
+        for (Expediente exp : expedientes) {
+            Double totalExp = pagoService.calcularTotalPorExpediente(exp.getId());
+            total += (totalExp != null ? totalExp : 0.0);
+        }
+        return total;
+    }
+
+    // ==================== PANEL DE PAGOS ====================
+
+    private VBox crearPanelPagos(ComboBox<Expediente> cmbExpedientes) {
+        VBox panel = new VBox(15);
+        panel.setPadding(new Insets(20));
+
+        // Título
+        Label titulo = new Label("Registrar Pago");
+        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        // Formulario de pago
+        GridPane formPago = new GridPane();
+        formPago.setHgap(10);
+        formPago.setVgap(10);
+        formPago.setPadding(new Insets(10));
+
+        // Campo: Monto
+        Label lblMonto = new Label("Monto:");
+        TextField txtMonto = new TextField();
+        txtMonto.setPromptText("Ingrese el monto");
+        txtMonto.setPrefWidth(200);
+
+        // Campo: Fecha
+        Label lblFecha = new Label("Fecha:");
+        DatePicker dpFecha = new DatePicker(LocalDate.now());
+        dpFecha.setPrefWidth(200);
+
+        // Campo: Forma de Pago
+        Label lblFormaPago = new Label("Forma de Pago:");
+        ComboBox<String> cmbFormaPago = new ComboBox<>();
+        cmbFormaPago.getItems().addAll("Efectivo", "Transferencia", "Cheque", "Tarjeta", "Otro");
+        cmbFormaPago.setValue("Efectivo");
+        cmbFormaPago.setPrefWidth(200);
+
+        // Campo: Referencia
+        Label lblReferencia = new Label("Referencia:");
+        TextField txtReferencia = new TextField();
+        txtReferencia.setPromptText("N° de comprobante, transferencia, etc.");
+        txtReferencia.setPrefWidth(200);
+
+        // Campo: Concepto
+        Label lblConcepto = new Label("Concepto:");
+        TextField txtConcepto = new TextField();
+        txtConcepto.setPromptText("Descripción del pago");
+        txtConcepto.setPrefWidth(400);
+
+        // Campo: Observaciones
+        Label lblObservaciones = new Label("Observaciones:");
+        TextArea txtObservaciones = new TextArea();
+        txtObservaciones.setPromptText("Observaciones adicionales");
+        txtObservaciones.setPrefRowCount(3);
+        txtObservaciones.setPrefWidth(400);
+
+        // Agregar al formulario
+        formPago.add(lblMonto, 0, 0);
+        formPago.add(txtMonto, 1, 0);
+        formPago.add(lblFecha, 0, 1);
+        formPago.add(dpFecha, 1, 1);
+        formPago.add(lblFormaPago, 0, 2);
+        formPago.add(cmbFormaPago, 1, 2);
+        formPago.add(lblReferencia, 0, 3);
+        formPago.add(txtReferencia, 1, 3);
+        formPago.add(lblConcepto, 0, 4);
+        formPago.add(txtConcepto, 1, 4);
+        formPago.add(lblObservaciones, 0, 5);
+        formPago.add(txtObservaciones, 1, 5);
+// Tabla de pagos del expediente (DEBE IR ANTES del botón)
+        TableView<Pago> tablaPagos = new TableView<>();
+        tablaPagos.setPrefHeight(300);
+
+        TableColumn<Pago, LocalDate> colFecha = new TableColumn<>("Fecha");
+        colFecha.setCellValueFactory(data -> new SimpleObjectProperty<>(data.getValue().getFecha()));
+        colFecha.setPrefWidth(100);
+
+        TableColumn<Pago, String> colMonto = new TableColumn<>("Monto");
+        colMonto.setCellValueFactory(data ->
+                new SimpleStringProperty(String.format("$%.2f", data.getValue().getMonto())));
+        colMonto.setPrefWidth(100);
+
+        TableColumn<Pago, String> colFormaPago = new TableColumn<>("Forma de Pago");
+        colFormaPago.setCellValueFactory(data ->
+                new SimpleStringProperty(data.getValue().getFormaPago()));
+        colFormaPago.setPrefWidth(120);
+
+        TableColumn<Pago, String> colReferencia = new TableColumn<>("Referencia");
+        colReferencia.setCellValueFactory(data ->
+                new SimpleStringProperty(data.getValue().getReferencia()));
+        colReferencia.setPrefWidth(150);
+
+        TableColumn<Pago, String> colConcepto = new TableColumn<>("Concepto");
+        colConcepto.setCellValueFactory(data ->
+                new SimpleStringProperty(data.getValue().getConcepto()));
+        colConcepto.setPrefWidth(200);
+
+        tablaPagos.getColumns().addAll(colFecha, colMonto, colFormaPago, colReferencia, colConcepto);
+
+        // Botón Registrar Pago
+        Button btnRegistrar = new Button("💰 Registrar Pago");
+        btnRegistrar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; " +
+                "-fx-font-weight: bold; -fx-padding: 10 20;");
+
+        btnRegistrar.setOnAction(e -> {
+            try {
+                Expediente expediente = cmbExpedientes.getValue();
+                if (expediente == null) {
+                    mostrarError("Debe seleccionar un expediente");
+                    return;
+                }
+
+                String montoStr = txtMonto.getText().trim();
+                if (montoStr.isEmpty()) {
+                    mostrarError("Debe ingresar el monto");
+                    return;
+                }
+
+                double monto = Double.parseDouble(montoStr);
+                if (monto <= 0) {
+                    mostrarError("El monto debe ser mayor a cero");
+                    return;
+                }
+
+                Pago pago = new Pago();
+                pago.setExpedienteId(expediente.getId());
+                pago.setClienteId(expediente.getClienteId());
+                pago.setMonto(monto);
+                pago.setFecha(dpFecha.getValue());
+                pago.setFormaPago(cmbFormaPago.getValue());
+                pago.setReferencia(txtReferencia.getText().trim());
+                pago.setConcepto(txtConcepto.getText().trim());
+                pago.setObservaciones(txtObservaciones.getText().trim());
+                pago.setId(usuarioActual.getId());
+
+                pagoService.crearPago(pago);
+
+                mostrarExito("Pago registrado exitosamente");
+
+                // Limpiar formulario
+                txtMonto.clear();
+                dpFecha.setValue(LocalDate.now());
+                cmbFormaPago.setValue("Efectivo");
+                txtReferencia.clear();
+                txtConcepto.clear();
+                txtObservaciones.clear();
+
+                // Recargar tabla de pagos
+                cargarTablaPagos(tablaPagos, expediente.getId());
+
+            } catch (NumberFormatException ex) {
+                mostrarError("El monto debe ser un número válido");
+            } catch (SQLException ex) {
+                mostrarError("Error al registrar pago: " + ex.getMessage());
+            }
+        });
+
+
+        // Listener para cargar pagos cuando se selecciona expediente
+        cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                cargarTablaPagos(tablaPagos, newVal.getId());
+            }
+        });
+
+        Label lblHistorial = new Label("Historial de Pagos");
+        lblHistorial.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+
+        panel.getChildren().addAll(titulo, formPago, btnRegistrar, new Separator(),
+                lblHistorial, tablaPagos);
+
+        return panel;
+    }
+
+    private void cargarTablaPagos(TableView<Pago> tabla, Integer expedienteId) {
+        try {
+            List<Pago> pagos = pagoService.listarPorExpediente(expedienteId);
+            tabla.setItems(FXCollections.observableArrayList(pagos));
+        } catch (SQLException ex) {
+            mostrarError("Error al cargar pagos: " + ex.getMessage());
+        }
+    }
+
+    // ==================== PANEL CUENTA CORRIENTE ====================
+
+    private VBox crearPanelCuentaCorriente(ComboBox<Expediente> cmbExpedientes) {
+        VBox panel = new VBox(15);
+        panel.setPadding(new Insets(20));
+
+        // Título
+        Label titulo = new Label("Estado de Cuenta Corriente");
+        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        // Resumen del expediente
+        HBox resumen = new HBox(20);
+        resumen.setAlignment(Pos.CENTER);
+
+        VBox cardHonorarios = crearTarjetaFinanciera("Honorarios", "$0.00", "#3498db");
+        VBox cardGastos = crearTarjetaFinanciera("Gastos", "$0.00", "#e74c3c");
+        VBox cardPagos = crearTarjetaFinanciera("Pagos", "$0.00", "#27ae60");
+        VBox cardSaldo = crearTarjetaFinanciera("Saldo", "$0.00", "#f39c12");
+
+        resumen.getChildren().addAll(cardHonorarios, cardGastos, cardPagos, cardSaldo);
+
+        // Tabla de movimientos
+        TableView<MovimientoCuenta> tablaMovimientos = new TableView<>();
+        tablaMovimientos.setPrefHeight(400);
+
+        TableColumn<MovimientoCuenta, LocalDate> colFecha = new TableColumn<>("Fecha");
+        colFecha.setCellValueFactory(data -> new SimpleObjectProperty<>(data.getValue().fecha));
+        colFecha.setPrefWidth(100);
+
+        TableColumn<MovimientoCuenta, String> colTipo = new TableColumn<>("Tipo");
+        colTipo.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().tipo));
+        colTipo.setPrefWidth(100);
+
+        TableColumn<MovimientoCuenta, String> colDescripcion = new TableColumn<>("Descripción");
+        colDescripcion.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().descripcion));
+        colDescripcion.setPrefWidth(300);
+
+        TableColumn<MovimientoCuenta, String> colDebe = new TableColumn<>("Debe");
+        colDebe.setCellValueFactory(data -> {
+            double debe = data.getValue().debe;
+            return new SimpleStringProperty(debe > 0 ? String.format("$%.2f", debe) : "-");
+        });
+        colDebe.setPrefWidth(100);
+        colDebe.setStyle("-fx-alignment: CENTER-RIGHT;");
+
+        TableColumn<MovimientoCuenta, String> colHaber = new TableColumn<>("Haber");
+        colHaber.setCellValueFactory(data -> {
+            double haber = data.getValue().haber;
+            return new SimpleStringProperty(haber > 0 ? String.format("$%.2f", haber) : "-");
+        });
+        colHaber.setPrefWidth(100);
+        colHaber.setStyle("-fx-alignment: CENTER-RIGHT;");
+
+        TableColumn<MovimientoCuenta, String> colSaldo = new TableColumn<>("Saldo");
+        colSaldo.setCellValueFactory(data ->
+                new SimpleStringProperty(String.format("$%.2f", data.getValue().saldo)));
+        colSaldo.setPrefWidth(120);
+        colSaldo.setStyle("-fx-alignment: CENTER-RIGHT;");
+
+        tablaMovimientos.getColumns().addAll(colFecha, colTipo, colDescripcion, colDebe, colHaber, colSaldo);
+
+        // Listener para actualizar cuando cambia el expediente
+        cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                cargarCuentaCorriente(newVal.getId(), resumen, tablaMovimientos,
+                        cardHonorarios, cardGastos, cardPagos, cardSaldo);
+            }
+        });
+
+        panel.getChildren().addAll(titulo, resumen, new Separator(), tablaMovimientos);
+
+        return panel;
+    }
+
+    private void cargarCuentaCorriente(Integer expedienteId, HBox resumen,
+                                       TableView<MovimientoCuenta> tabla, VBox cardHonorarios, VBox cardGastos,
+                                       VBox cardPagos, VBox cardSaldo) {
+        try {
+            // Obtener datos
+            List<Honorario> honorarios = honorarioService.listarPorExpediente(expedienteId);
+            List<Gasto> gastos = gastoService.listarPorExpediente(expedienteId);
+            List<Pago> pagos = pagoService.listarPorExpediente(expedienteId);
+
+            // Calcular totales
+            double totalHonorarios = honorarios.stream()
+                    .mapToDouble(h -> h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0)
+                    .sum();
+
+            double totalGastos = gastos.stream()
+                    .mapToDouble(g -> g.getMonto() != null ? g.getMonto() : 0.0)
+                    .sum();
+
+            double totalPagos = pagos.stream()
+                    .mapToDouble(p -> p.getMonto() != null ? p.getMonto() : 0.0)
+                    .sum();
+
+            double saldo = (totalHonorarios + totalGastos) - totalPagos;
+
+            // Actualizar tarjetas
+            actualizarTarjeta(cardHonorarios, String.format("$%.2f", totalHonorarios));
+            actualizarTarjeta(cardGastos, String.format("$%.2f", totalGastos));
+            actualizarTarjeta(cardPagos, String.format("$%.2f", totalPagos));
+            actualizarTarjeta(cardSaldo, String.format("$%.2f", saldo));
+
+            // Crear lista de movimientos
+            List<MovimientoCuenta> movimientos = new ArrayList<>();
+            double saldoAcumulado = 0.0;
+
+            // Agregar honorarios
+            for (Honorario h : honorarios) {
+                saldoAcumulado += h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0;
+                movimientos.add(new MovimientoCuenta(
+                        h.getFechaCreacion().toLocalDate(),
+                        "Honorario",
+                        h.getDescripcion(),
+                        h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0,
+                        0.0,
+                        saldoAcumulado
+                ));
+            }
+
+            // Agregar gastos
+            for (Gasto g : gastos) {
+                saldoAcumulado += g.getMonto() != null ? g.getMonto() : 0.0;
+                movimientos.add(new MovimientoCuenta(
+                        g.getFecha(),
+                        "Gasto",
+                        g.getConcepto(),
+                        g.getMonto() != null ? g.getMonto() : 0.0,
+                        0.0,
+                        saldoAcumulado
+                ));
+            }
+
+            // Agregar pagos
+            for (Pago p : pagos) {
+                saldoAcumulado -= p.getMonto() != null ? p.getMonto() : 0.0;
+                movimientos.add(new MovimientoCuenta(
+                        p.getFecha(),
+                        "Pago",
+                        p.getConcepto() != null ? p.getConcepto() : "Pago recibido",
+                        0.0,
+                        p.getMonto() != null ? p.getMonto() : 0.0,
+                        saldoAcumulado
+                ));
+            }
+
+            // Ordenar por fecha
+            movimientos.sort(Comparator.comparing(m -> m.fecha));
+
+            // Recalcular saldo acumulado después de ordenar
+            saldoAcumulado = 0.0;
+            for (MovimientoCuenta m : movimientos) {
+                saldoAcumulado += m.debe - m.haber;
+                m.saldo = saldoAcumulado;
+            }
+
+            tabla.setItems(FXCollections.observableArrayList(movimientos));
+
+        } catch (SQLException ex) {
+            mostrarError("Error al cargar cuenta corriente: " + ex.getMessage());
+        }
+    }
+
+    private void actualizarTarjeta(VBox tarjeta, String nuevoValor) {
+        Label lblValor = (Label) tarjeta.getChildren().get(1);
+        lblValor.setText(nuevoValor);
+    }
+
+    // Clase auxiliar para los movimientos de cuenta corriente
+    private static class MovimientoCuenta {
+        LocalDate fecha;
+        String tipo;
+        String descripcion;
+        double debe;
+        double haber;
+        double saldo;
+
+        public MovimientoCuenta(LocalDate fecha, String tipo, String descripcion,
+                                double debe, double haber, double saldo) {
+            this.fecha = fecha;
+            this.tipo = tipo;
+            this.descripcion = descripcion;
+            this.debe = debe;
+            this.haber = haber;
+            this.saldo = saldo;
+        }
+    }
+    private boolean mostrarConfirmacion(String mensaje) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirmación");
+        alert.setHeaderText(null);
+        alert.setContentText(mensaje);
+
+        Optional<ButtonType> resultado = alert.showAndWait();
+        return resultado.isPresent() && resultado.get() == ButtonType.OK;
+    }
+
+
+
+
+
+
 }
+
