@@ -613,7 +613,7 @@ public class ExpedienteDAO {
     /**
      * Obtiene todos los expedientes de un cliente específico
      */
-    public List<Expediente> listarPorCliente(Integer clienteId) throws SQLException {
+    public List<Expediente> listarPorClienteId(Integer clienteId) throws SQLException {
         String sql = """
         SELECT * FROM expedientes 
         WHERE cliente_id = ?

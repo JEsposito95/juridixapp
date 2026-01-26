@@ -2273,7 +2273,7 @@ public class MainController {
 
         // Cargar expedientes del cliente
         try {
-            List<Expediente> expedientes = new ExpedienteDAO().listarPorCliente(cliente.getId());
+            List<Expediente> expedientes = new ExpedienteDAO().listarPorClienteId(cliente.getId());
             listaExp.addAll(expedientes);
         } catch (SQLException e) {
             mostrarError("Error al cargar expedientes: " + e.getMessage());
@@ -2397,6 +2397,10 @@ public class MainController {
         ventana.initModality(Modality.APPLICATION_MODAL);
         ventana.setTitle("Subir Documento - " + cliente.getNombreCompleto());
 
+        TextField txtNombrePersonalizado = new TextField();
+        txtNombrePersonalizado.setPromptText("Nombre personalizado (opcional)");
+        txtNombrePersonalizado.setMaxWidth(Double.MAX_VALUE);
+
         VBox form = new VBox(15);
         form.setPadding(new Insets(20));
 
@@ -2422,6 +2426,9 @@ public class MainController {
                 archivoSeleccionado[0] = archivo;
                 lblArchivo.setText("Archivo: " + archivo.getName() +
                         " (" + (archivo.length() / 1024) + " KB)");
+                // NUEVO: Pre-cargar el nombre sin extensión
+                String nombreSinExt = archivo.getName().substring(0, archivo.getName().lastIndexOf('.'));
+                txtNombrePersonalizado.setText(nombreSinExt);
             }
         });
 
@@ -2440,6 +2447,8 @@ public class MainController {
         Button btnSubir = new Button("⬆️ Subir");
         btnSubir.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
         btnSubir.setOnAction(e -> {
+            String nombreFinal = txtNombrePersonalizado.getText().trim().isEmpty() ?
+                    archivoSeleccionado[0].getName() : txtNombrePersonalizado.getText().trim();
             if (archivoSeleccionado[0] == null) {
                 mostrarAdvertencia("Seleccione un archivo");
                 return;
@@ -2477,6 +2486,8 @@ public class MainController {
                 btnSeleccionar,
                 lblArchivo,
                 new Separator(),
+                new Label("Nombre del documento:"),
+                txtNombrePersonalizado,
                 new Label("Tipo de documento *:"),
                 cmbTipo,
                 new Label("Descripción:"),
@@ -2977,6 +2988,23 @@ public class MainController {
     }
 
     private void abrirFormularioHonorario(Honorario honorario, Integer expedienteId) {
+
+        // Recargar lista de expedientes por si hay nuevos
+        ComboBox<Expediente> cmbExpedientesForm = new ComboBox<>();
+        try {
+            List<Expediente> expedientes = expedienteService.listarActivos();
+            cmbExpedientesForm.setItems(FXCollections.observableArrayList(expedientes));
+            // Pre-seleccionar el expediente actual
+            if (expedienteId != null) {
+                expedientes.stream()
+                        .filter(e -> e.getId().equals(expedienteId))
+                        .findFirst()
+                        .ifPresent(cmbExpedientesForm::setValue);
+            }
+        } catch (SQLException e) {
+            mostrarError("Error al cargar expedientes: " + e.getMessage());
+        }
+
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
         ventana.setTitle(honorario == null ? "Nuevo Honorario" : "Editar Honorario");
