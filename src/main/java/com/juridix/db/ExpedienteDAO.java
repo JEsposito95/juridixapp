@@ -5,7 +5,6 @@ import com.juridix.model.EstadoExpediente;
 
 import java.sql.*;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -331,15 +330,15 @@ public class ExpedienteDAO {
 
     /**
      * Busca expedientes por múltiples criterios
-     * @param numero Número (puede ser null)
+     *
+     * @param numero  Número (puede ser null)
      * @param cliente Cliente (puede ser null)
-     * @param estado Estado (puede ser null)
-     * @param fuero Fuero (puede ser null)
+     * @param estado  Estado (puede ser null)
      * @return Lista de expedientes que coinciden
      * @throws SQLException Si ocurre un error en la base de datos
      */
     public List<Expediente> buscarPorCriterios(String numero, String cliente,
-                                               EstadoExpediente estado, String fuero) throws SQLException {
+                                               EstadoExpediente estado) throws SQLException {
         StringBuilder sql = new StringBuilder("SELECT * FROM expedientes WHERE 1=1");
         List<Object> parametros = new ArrayList<>();
 
@@ -358,12 +357,15 @@ public class ExpedienteDAO {
             parametros.add(estado.name());
         }
 
-        if (fuero != null && !fuero.trim().isEmpty()) {
-            sql.append(" AND fuero = ?");
-            parametros.add(fuero.trim());
-        }
-
         sql.append(" ORDER BY fecha_creacion DESC");
+
+        // ========== DEBUG ==========
+        System.out.println("🔍 SQL GENERADO: " + sql.toString());
+        System.out.println("📋 PARÁMETROS:");
+        for (int i = 0; i < parametros.size(); i++) {
+            System.out.println("  [" + (i+1) + "] = " + parametros.get(i));
+        }
+        // ========== FIN DEBUG ==========
 
         List<Expediente> expedientes = new ArrayList<>();
 
@@ -379,6 +381,10 @@ public class ExpedienteDAO {
                     expedientes.add(mapearExpediente(rs));
                 }
             }
+
+            // ========== DEBUG ==========
+            System.out.println("📊 Expedientes mapeados: " + expedientes.size());
+            // ========== FIN DEBUG ==========
 
             return expedientes;
 
@@ -640,4 +646,22 @@ public class ExpedienteDAO {
             throw e;
         }
     }
+    public int contarPorCreador(Integer usuarioId) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM expedientes WHERE creador_id = ?";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, usuarioId);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+
+            return 0;
+        }
+    }
+
+
 }

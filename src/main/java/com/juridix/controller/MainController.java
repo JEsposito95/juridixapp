@@ -1,7 +1,9 @@
 package com.juridix.controller;
 
+import com.juridix.db.Database;
 import com.juridix.db.ExpedienteDAO;
 import com.juridix.model.*;
+import com.juridix.seguridad.PasswordUtil;
 import com.juridix.service.*;
 import com.juridix.seguridad.SesionUsuario;
 import javafx.beans.property.SimpleObjectProperty;
@@ -20,6 +22,9 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.ColumnConstraints;
 
 import java.io.File;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -60,7 +65,6 @@ public class MainController {
     private DatePicker dpFechaInicio;
     private TextField txtMontoEstimado;
     private TextArea txtObservaciones;
-
 
 
     // Componentes de la tabla de expedientes
@@ -115,6 +119,13 @@ public class MainController {
         inicializarUI();
         cargarDashboard();
         cargarExpedientes();
+
+        // ========== ASIGNAR USUARIO ACTUAL ==========
+        this.usuarioActual = SesionUsuario.getUsuarioActual();
+
+        if (this.usuarioActual == null) {
+            throw new IllegalStateException("No hay usuario en sesión");
+        }
     }
 
     private void inicializarUI() {
@@ -128,33 +139,36 @@ public class MainController {
         root.setCenter(crearPanelPrincipal());
 
         // Bottom: Barra de estado
-        root.setBottom(crearBarraEstado());
+        //root.setBottom(crearBarraEstado());
 
         scene = new Scene(root, 1200, 700);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
     }
 
     private HBox crearBarraSuperior() {
         // Badge de notificaciones
         Label lblBadgeNotif = new Label();
-        lblBadgeNotif.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; " +
-                "-fx-padding: 5 10; -fx-background-radius: 15; -fx-font-weight: bold;");
+        lblBadgeNotif.getStyleClass().add("badge");
         lblBadgeNotif.setVisible(false);
 
         HBox barra = new HBox(15);
         barra.setPadding(new Insets(10));
         barra.setAlignment(Pos.CENTER_LEFT);
-        barra.setStyle("-fx-background-color: #2c3e50;");
+        //barra.setStyle("-fx-background-color: #2c3e50;");
+
+        //nuevo estilo
+        barra.getStyleClass().add("barra-superior");
 
         Label lblTitulo = new Label("JURIDIX - Gestión de Estudios Jurídicos");
         lblTitulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
-
 
 
         // ============ BÚSQUEDA GLOBAL (NUEVO) ============
         TextField txtBusquedaGlobal = new TextField();
         txtBusquedaGlobal.setPromptText("🔍 Buscar en todo...");
         txtBusquedaGlobal.setPrefWidth(300);
-        txtBusquedaGlobal.setStyle("-fx-background-radius: 20; -fx-padding: 8;");
+        txtBusquedaGlobal.getStyleClass().add("search-field");
+        //txtBusquedaGlobal.setStyle("-fx-background-radius: 20; -fx-padding: 8;");
 
         txtBusquedaGlobal.setOnAction(e -> {
             String busqueda = txtBusquedaGlobal.getText().trim();
@@ -164,13 +178,15 @@ public class MainController {
         });
 
         Button btnBuscar = new Button("🔍");
-        btnBuscar.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-background-radius: 20;");
+        btnBuscar.getStyleClass().addAll("button", "button-info");
         btnBuscar.setOnAction(e -> {
             String busqueda = txtBusquedaGlobal.getText().trim();
             if (!busqueda.isEmpty()) {
                 mostrarResultadosBusquedaGlobal(busqueda);
             }
         });
+
+
         // ============ FIN BÚSQUEDA GLOBAL ============
 
         Region spacer = new Region();
@@ -180,7 +196,7 @@ public class MainController {
         lblUsuario.setStyle("-fx-text-fill: white; -fx-font-size: 14px;");
 
         Button btnCerrarSesion = new Button("Cerrar Sesión");
-        btnCerrarSesion.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+        btnCerrarSesion.getStyleClass().addAll("button", "button-danger");
         btnCerrarSesion.setOnAction(e -> cerrarSesion());
 
         //barra.getChildren().addAll(lblTitulo, txtBusquedaGlobal, btnBuscar, spacer, lblUsuario, btnCerrarSesion);
@@ -197,9 +213,18 @@ public class MainController {
             // Ignorar
         }
 
-        barra.getChildren().addAll(lblTitulo, lblBadgeNotif, txtBusquedaGlobal, btnBuscar, spacer, lblUsuario, btnCerrarSesion);
+        // Agregar botón de backup
+        Button btnBackup = new Button("💾 Backup");
+        btnBackup.setStyle("-fx-background-color: #9b59b6; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnBackup.setOnAction(e -> crearBackupBaseDatos());
+
+// Y agregarlo a la barra:
+        barra.getChildren().addAll(lblTitulo, lblBadgeNotif, txtBusquedaGlobal, btnBuscar,
+                btnBackup, spacer, lblUsuario, btnCerrarSesion);
+
         return barra;
     }
+
     private VBox crearPanelPrincipal() {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(10));
@@ -226,8 +251,6 @@ public class MainController {
         tabAgenda.setClosable(false);
         tabAgenda.setContent(crearPanelAgenda());
 
-
-
         panel.getChildren().add(tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
@@ -236,10 +259,20 @@ public class MainController {
         tabEconomia.setClosable(false);
         tabEconomia.setContent(crearPanelEconomia());
 
+        // ========== PESTAÑA USUARIOS (SOLO ADMIN) ==========
+        if (SesionUsuario.getUsuarioActual().getRol() == RolUsuario.ADMIN) {
+            Tab tabUsuarios = new Tab("👥 Usuarios");
+            tabUsuarios.setClosable(false);
+            tabUsuarios.setContent(crearPanelUsuarios());
+
+            tabPane.getTabs().add(tabUsuarios);
+        }
+
         tabPane.getTabs().addAll(tabDashboard, tabExpedientes, tabClientes, tabAgenda, tabEconomia);
 
         return panel;
     }
+
 
     // ==================== DASHBOARD ====================
 
@@ -284,6 +317,9 @@ public class MainController {
 
         tarjetaActivos.getChildren().addAll(lblTituloAct, lblExpedientesActivos);
 
+
+
+
         // Tarjeta Eventos Hoy
         VBox tarjetaEventosHoy = new VBox(5);
         tarjetaEventosHoy.setAlignment(Pos.CENTER);
@@ -316,6 +352,17 @@ public class MainController {
 
         tarjetas.getChildren().addAll(tarjetaExpedientes, tarjetaActivos, tarjetaEventosHoy, tarjetaEventosSemana);
 
+        // ========== AGREGAR BOTÓN AQUÍ ==========
+        Button btnMigrarDatos = new Button("🔧 Actualizar vínculos Cliente-Expediente");
+        btnMigrarDatos.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; " +
+                "-fx-font-weight: bold; -fx-font-size: 14px; -fx-padding: 12 25;");
+        btnMigrarDatos.setOnAction(e -> migrarClienteIdEnExpedientes());
+
+        // Centrarlo
+        HBox contenedorBoton = new HBox(btnMigrarDatos);
+        contenedorBoton.setAlignment(Pos.CENTER);
+        contenedorBoton.setPadding(new Insets(10));
+
         // Panel de próximos eventos Y notificaciones
         HBox panelInferior = new HBox(15);
         panelInferior.setAlignment(Pos.TOP_CENTER);
@@ -343,9 +390,72 @@ public class MainController {
 
         panelInferior.getChildren().addAll(panelEventos, panelNotificaciones);
 
-        panel.getChildren().addAll(titulo, tarjetas, panelInferior);
+        panel.getChildren().addAll(titulo, tarjetas,contenedorBoton, panelInferior);
         return panel;
     }
+
+    private void migrarClienteIdEnExpedientes() {
+        Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmacion.setTitle("Migrar datos");
+        confirmacion.setHeaderText("¿Actualizar vínculos Cliente-Expediente?");
+        confirmacion.setContentText(
+                "Esto buscará el cliente por nombre y vinculará automáticamente los expedientes.\n" +
+                        "Esta operación puede tardar unos segundos.\n\n" +
+                        "¿Continuar?"
+        );
+
+        if (confirmacion.showAndWait().get() != ButtonType.OK) {
+            return;
+        }
+
+        try {
+            List<Expediente> expedientes = expedienteService.listarTodos();
+            List<Cliente> clientes = clienteService.listarTodos();
+
+            int actualizados = 0;
+            int noEncontrados = 0;
+
+            for (Expediente exp : expedientes) {
+                // Si ya tiene cliente_id, saltar
+                if (exp.getClienteId() != null) {
+                    continue;
+                }
+
+                String nombreCliente = exp.getCliente();
+                if (nombreCliente == null || nombreCliente.isEmpty()) {
+                    continue;
+                }
+
+                // Buscar el cliente por nombre
+                Cliente clienteEncontrado = clientes.stream()
+                        .filter(c -> c.getNombreCompleto().equalsIgnoreCase(nombreCliente))
+                        .findFirst()
+                        .orElse(null);
+
+                if (clienteEncontrado != null) {
+                    exp.setClienteId(clienteEncontrado.getId());
+                    expedienteService.actualizarExpediente(exp);
+                    actualizados++;
+                    System.out.println("✅ Vinculado: " + exp.getNumero() + " → " + clienteEncontrado.getNombreCompleto());
+                } else {
+                    noEncontrados++;
+                    System.out.println("⚠️ No encontrado cliente: " + nombreCliente + " (Expediente: " + exp.getNumero() + ")");
+                }
+            }
+
+            mostrarInfo(
+                    "Migración completada:\n\n" +
+                            "✅ Expedientes actualizados: " + actualizados + "\n" +
+                            "⚠️ Clientes no encontrados: " + noEncontrados
+            );
+
+        } catch (Exception ex) {
+            mostrarError("Error en migración: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+    }
+
+
 
     // ==================== BÚSQUEDA GLOBAL ====================
 
@@ -416,7 +526,7 @@ public class MainController {
         listExpedientes.setItems(resultadosExpedientes);
 
         try {
-            List<Expediente> expedientes = expedienteService.buscarPorCriterios(busqueda, busqueda, null, null);
+            List<Expediente> expedientes = expedienteService.buscarPorCriterios(busqueda, busqueda, null);
             if (expedientes.isEmpty()) {
                 resultadosExpedientes.add("No se encontraron expedientes");
             } else {
@@ -436,7 +546,7 @@ public class MainController {
                 if (seleccionado != null && !seleccionado.startsWith("No se") && !seleccionado.startsWith("❌")) {
                     try {
                         String numero = seleccionado.split(" - ")[0];
-                        List<Expediente> expedientes = expedienteService.buscarPorCriterios(numero, null, null, null);
+                        List<Expediente> expedientes = expedienteService.buscarPorCriterios(numero, null, null);
                         if (!expedientes.isEmpty()) {
                             ventana.close();
                             cargarExpedienteEnFormulario(expedientes.get(0));
@@ -501,7 +611,9 @@ public class MainController {
         contenedor.setAlignment(Pos.CENTER);
         contenedor.setPadding(new Insets(10));
         contenedor.setPrefSize(200, 120);
-        contenedor.setStyle("-fx-background-color: white; -fx-border-color: " + color + "; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        //contenedor.setStyle("-fx-background-color: white; -fx-border-color: " + color + "; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        //nuevo estilo
+        contenedor.getStyleClass().addAll("stat-card", "stat-card-blue");
 
         Label lblTitulo = new Label(titulo);
         lblTitulo.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
@@ -717,7 +829,8 @@ public class MainController {
     private VBox crearFormularioExpediente() {
         VBox form = new VBox(10);
         form.setPadding(new Insets(10));
-        form.setStyle("-fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-width: 1;");
+//        form.setStyle("-fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-width: 1;");
+        form.getStyleClass().add("panel-formulario");
 
         Label lblTitulo = new Label("Datos del Expediente");
         lblTitulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -732,7 +845,7 @@ public class MainController {
 
         // Botón para crear cliente rápido
         Button btnNuevoClienteRapido = new Button("➕");
-        btnNuevoClienteRapido.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+        btnNuevoClienteRapido.getStyleClass().addAll("button", "button-success");
         btnNuevoClienteRapido.setOnAction(e -> {
             abrirFormularioCliente(null);
             // Recargar combo después de crear cliente
@@ -818,24 +931,34 @@ public class MainController {
             System.err.println("Error al cargar clientes: " + e.getMessage());
         }
     }
+
     private HBox crearBotonesFormularioExpediente(ComboBox<Cliente> cmbClientes) {
         HBox botones = new HBox(10);
         botones.setAlignment(Pos.CENTER);
         botones.setPadding(new Insets(10, 0, 0, 0));
 
         Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        //btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> guardarExpedienteConCliente(cmbClientes));
 
         Button btnNuevo = new Button("📄 Nuevo");
+        btnNuevo.getStyleClass().add("button");
         btnNuevo.setOnAction(e -> limpiarFormularioExpediente());
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
+        //btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnEliminar.getStyleClass().addAll("button", "button-danger");
         btnEliminar.setOnAction(e -> eliminarExpediente());
+//        // ========== APLICAR PERMISOS ==========
+//        if (!puedeEliminar()) {
+//            btnEliminar.setDisable(true);
+//            btnEliminar.setTooltip(new Tooltip("No tienes permisos para eliminar expedientes"));
+//        }
 
         Button btnMovimientos = new Button("📋 Ver Movimientos");
-        btnMovimientos.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
+        //btnMovimientos.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnMovimientos.getStyleClass().addAll("button", "button-info");
         btnMovimientos.setOnAction(e -> abrirVentanaMovimientos());
 
         botones.getChildren().addAll(btnGuardar, btnNuevo, btnEliminar, btnMovimientos);
@@ -998,7 +1121,7 @@ public class MainController {
         // Top: Info del expediente
         VBox header = new VBox(5);
         header.setPadding(new Insets(10));
-        header.setStyle("-fx-background-color: #3498db; -fx-background-radius: 5;");
+        header.getStyleClass().addAll("button", "button-info");
 
         Label lblExpediente = new Label("Expediente: " + expedienteSeleccionado.getNumero());
         lblExpediente.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: white;");
@@ -1044,7 +1167,7 @@ public class MainController {
         botones.setPadding(new Insets(10));
 
         Button btnNuevo = new Button("➕ Nuevo Movimiento");
-        btnNuevo.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevo.getStyleClass().addAll("button", "button-success");
         btnNuevo.setOnAction(e -> abrirFormularioMovimiento(null, listaMovimientos));
 
         Button btnEditar = new Button("✏️ Editar");
@@ -1058,7 +1181,7 @@ public class MainController {
         });
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+        btnEliminar.getStyleClass().addAll("button", "button-danger");
         btnEliminar.setOnAction(e -> {
             Movimiento seleccionado = tablaMovimientos.getSelectionModel().getSelectedItem();
             if (seleccionado != null) {
@@ -1146,7 +1269,7 @@ public class MainController {
         botones.setPadding(new Insets(10, 0, 0, 0));
 
         Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> {
             try {
                 Movimiento mov = movimiento != null ? movimiento : new Movimiento();
@@ -1216,7 +1339,7 @@ public class MainController {
         botonesSuperiores.setAlignment(Pos.CENTER_LEFT);
 
         Button btnNuevoEvento = new Button("➕ Nuevo Evento");
-        btnNuevoEvento.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevoEvento.getStyleClass().addAll("button", "button-success");
         btnNuevoEvento.setOnAction(e -> abrirFormularioEvento(null));
 
         Button btnActualizar = new Button("🔄 Actualizar");
@@ -1250,6 +1373,22 @@ public class MainController {
         colFechaHora.setCellValueFactory(new PropertyValueFactory<>("fechaHora"));
         colFechaHora.setPrefWidth(150);
 
+        // CELLFACTORY PARA FORMATEAR:
+        colFechaHora.setCellFactory(column -> new TableCell<EventoAgenda, LocalDateTime>() {
+            @Override
+            protected void updateItem(LocalDateTime item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    // Formato: 26-Ene 14:30
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MMM HH:mm",
+                            new java.util.Locale("es", "ES"));
+                    setText(item.format(formatter));
+                }
+            }
+        });
+
         TableColumn<EventoAgenda, String> colTitulo = new TableColumn<>("Título");
         colTitulo.setCellValueFactory(new PropertyValueFactory<>("titulo"));
         colTitulo.setPrefWidth(250);
@@ -1268,18 +1407,24 @@ public class MainController {
 
         // Columna de acciones
         TableColumn<EventoAgenda, Void> colAcciones = new TableColumn<>("Acciones");
-        colAcciones.setPrefWidth(200);
+        colAcciones.setPrefWidth(480);
         colAcciones.setCellFactory(param -> new TableCell<>() {
-            private final Button btnEditar = new Button("✏️");
-            private final Button btnCompletar = new Button("✅");
-            private final Button btnEliminar = new Button("🗑️");
+            private final Button btnEditar = new Button("✏️ Editar");
+            private final Button btnCompletar = new Button("✅ Completar");
+            private final Button btnEliminar = new Button("🗑️ Eliminar");
 
             {
+
+                btnEditar.setMinWidth(85);
+                btnCompletar.setMinWidth(110);
+                btnEliminar.setMinWidth(85);
+
                 btnEditar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
                     abrirFormularioEvento(evento);
                 });
-
+                //nuevo estilo botones
+                btnCompletar.getStyleClass().addAll("button", "button-success");
                 btnCompletar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
                     try {
@@ -1291,17 +1436,36 @@ public class MainController {
                     }
                 });
 
-                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.getStyleClass().addAll("button", "button-danger");
                 btnEliminar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
+
+                    StringBuilder mensaje = new StringBuilder();
+                    mensaje.append("¿Eliminar el evento?\n\n");
+                    mensaje.append("📅 ").append(evento.getTitulo()).append("\n");
+                    mensaje.append("⏰ ").append(evento.getFechaHora().format(
+                            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))).append("\n");
+                    mensaje.append("📍 Tipo: ").append(evento.getTipo().getDisplayName()).append("\n");
+
+                    if (evento.getUbicacion() != null && !evento.getUbicacion().isEmpty()) {
+                        mensaje.append("📍 Ubicación: ").append(evento.getUbicacion()).append("\n");
+                    }
+
+                    if (evento.getExpedienteId() != null) {
+                        mensaje.append("\n⚠️ Este evento está asociado a un expediente");
+                    }
+
                     Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
-                    confirmacion.setHeaderText("¿Eliminar este evento?");
+                    confirmacion.setTitle("Confirmar eliminación");
+                    confirmacion.setHeaderText("Eliminar evento");
+                    confirmacion.setContentText(mensaje.toString());
 
                     if (confirmacion.showAndWait().get() == ButtonType.OK) {
                         try {
                             agendaService.eliminarEvento(evento.getId());
                             mostrarInfo("Evento eliminado");
                             cargarEventosAgenda();
+                            actualizarNotificaciones();
                         } catch (SQLException ex) {
                             mostrarError("Error: " + ex.getMessage());
                         }
@@ -1425,11 +1589,28 @@ public class MainController {
 
         TextField txtUbicacion = new TextField();
 
-        ComboBox<Integer> cmbRecordatorio = new ComboBox<>();
+        ComboBox<RecordatorioOpcion> cmbRecordatorio = new ComboBox<>();
         cmbRecordatorio.setItems(FXCollections.observableArrayList(
-                15, 30, 60, 120, 1440, 2880
+                new RecordatorioOpcion(15, "15 minutos antes"),
+                new RecordatorioOpcion(30, "30 minutos antes"),
+                new RecordatorioOpcion(60, "1 hora antes"),
+                new RecordatorioOpcion(120, "2 horas antes"),
+                new RecordatorioOpcion(1440, "1 día antes"),
+                new RecordatorioOpcion(2880, "2 días antes")
         ));
-        cmbRecordatorio.setPromptText("Minutos antes");
+        cmbRecordatorio.setPromptText("Seleccione recordatorio");
+        cmbRecordatorio.setMaxWidth(Double.MAX_VALUE);
+
+        if (evento != null) {
+            // Buscar y seleccionar el recordatorio actual
+            Integer minutosEvento = evento.getRecordatorioMinutos();
+            cmbRecordatorio.getItems().stream()
+                    .filter(r -> r.getMinutos().equals(minutosEvento))
+                    .findFirst()
+                    .ifPresent(cmbRecordatorio::setValue);
+        } else {
+            cmbRecordatorio.setValue(cmbRecordatorio.getItems().get(4)); // 1 día por defecto
+        }
 
         // Selector de expediente (opcional)
         ComboBox<String> cmbExpediente = new ComboBox<>();
@@ -1456,9 +1637,9 @@ public class MainController {
             spDuracion.getValueFactory().setValue(evento.getDuracionMinutos());
             cmbTipo.setValue(evento.getTipo());
             txtUbicacion.setText(evento.getUbicacion());
-            cmbRecordatorio.setValue(evento.getRecordatorioMinutos());
+            cmbRecordatorio.setValue(cmbRecordatorio.getValue());
         } else {
-            cmbRecordatorio.setValue(1440);
+            cmbRecordatorio.setValue(cmbRecordatorio.getValue());
         }
 
         form.getChildren().addAll(
@@ -1478,7 +1659,7 @@ public class MainController {
         botones.setPadding(new Insets(10, 0, 0, 0));
 
         Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> {
             try {
                 EventoAgenda ev = evento != null ? evento : new EventoAgenda();
@@ -1494,7 +1675,12 @@ public class MainController {
                 ev.setDuracionMinutos(spDuracion.getValue());
                 ev.setTipo(cmbTipo.getValue());
                 ev.setUbicacion(txtUbicacion.getText());
-                ev.setRecordatorioMinutos(cmbRecordatorio.getValue());
+                RecordatorioOpcion recordatorio = cmbRecordatorio.getValue();
+                if (recordatorio != null) {
+                    ev.setRecordatorioMinutos(recordatorio.getMinutos());
+                } else {
+                    ev.setRecordatorioMinutos(1440); // 1 día por defecto
+                }
 
                 // Expediente asociado
                 String expSeleccionado = cmbExpediente.getValue();
@@ -1595,30 +1781,80 @@ public class MainController {
         }
     }
 
+    // ========== 1. AL ELIMINAR EXPEDIENTE ==========
     private void eliminarExpediente() {
         if (expedienteSeleccionado == null) {
             mostrarAdvertencia("Seleccione un expediente para eliminar");
             return;
         }
+        try {
+            // Contar elementos asociados
+            int cantMovimientos = movimientoService.listarPorExpediente(expedienteSeleccionado.getId()).size();
+            int cantHonorarios = honorarioService.listarPorExpediente(expedienteSeleccionado.getId()).size();
+            int cantGastos = gastoService.listarPorExpediente(expedienteSeleccionado.getId()).size();
+            int cantPagos = pagoService.listarPorExpediente(expedienteSeleccionado.getId()).size();
 
-        Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
-        confirmacion.setTitle("Confirmar eliminación");
-        confirmacion.setHeaderText("¿Está seguro de eliminar este expediente?");
-        confirmacion.setContentText(expedienteSeleccionado.getNumero() + " - " +
-                expedienteSeleccionado.getCaratula());
+            // Construir mensaje detallado
+            StringBuilder mensaje = new StringBuilder();
+            mensaje.append("¿Está seguro de eliminar el expediente?\n\n");
+            mensaje.append("📁 ").append(expedienteSeleccionado.getNumero()).append("\n");
+            mensaje.append("    ").append(expedienteSeleccionado.getCaratula()).append("\n\n");
 
-        Optional<ButtonType> resultado = confirmacion.showAndWait();
-        if (resultado.isPresent() && resultado.get() == ButtonType.OK) {
-            try {
+            boolean tieneAsociaciones = false;
+
+            if (cantMovimientos > 0) {
+                mensaje.append("⚠️ Se eliminarán ").append(cantMovimientos).append(" movimiento(s)\n");
+                tieneAsociaciones = true;
+            }
+
+            if (cantHonorarios > 0) {
+                mensaje.append("💵 Se eliminarán ").append(cantHonorarios).append(" honorario(s)\n");
+                tieneAsociaciones = true;
+            }
+
+            if (cantGastos > 0) {
+                mensaje.append("💸 Se eliminarán ").append(cantGastos).append(" gasto(s)\n");
+                tieneAsociaciones = true;
+            }
+
+            if (cantPagos > 0) {
+                mensaje.append("💳 Se eliminarán ").append(cantPagos).append(" pago(s)\n");
+                tieneAsociaciones = true;
+            }
+
+            if (tieneAsociaciones) {
+                mensaje.append("\n⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER");
+            } else {
+                mensaje.append("Este expediente no tiene datos asociados.");
+            }
+
+            Alert confirmacion = new Alert(Alert.AlertType.WARNING);
+            confirmacion.setTitle("Confirmar eliminación");
+            confirmacion.setHeaderText("Eliminar expediente y todos sus datos");
+            confirmacion.setContentText(mensaje.toString());
+
+            // Agregar ícono grande de advertencia
+            confirmacion.setGraphic(new Label("⚠️"));
+
+            Optional<ButtonType> resultado = confirmacion.showAndWait();
+            if (resultado.isPresent() && resultado.get() == ButtonType.OK) {
                 expedienteService.eliminarExpediente(expedienteSeleccionado.getId());
-                mostrarInfo("Expediente eliminado correctamente");
+
+                String mensajeExito = "Expediente eliminado correctamente";
+                if (tieneAsociaciones) {
+                    int totalEliminados = cantMovimientos + cantHonorarios + cantGastos + cantPagos;
+                    mensajeExito += "\n(" + totalEliminados + " registros asociados eliminados)";
+                }
+
+                mostrarInfo(mensajeExito);
                 limpiarFormularioExpediente();
                 cargarExpedientes();
                 cargarDashboard();
-            } catch (SQLException e) {
-                mostrarError("No se pudo eliminar el expediente: " + e.getMessage());
-                e.printStackTrace();
             }
+
+        } catch (SQLException e) {
+            mostrarError("No se pudo eliminar el expediente: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -1633,28 +1869,55 @@ public class MainController {
         }
     }
 
+
     private void buscarExpedientes() {
         try {
             String textoBusqueda = txtBuscar.getText().trim();
             EstadoExpediente estadoFiltro = cmbFiltroEstado.getValue();
 
+            System.out.println("========================================");
+            System.out.println("🔍 DEBUG: Búsqueda de expedientes");
+            System.out.println("Texto: '" + textoBusqueda + "' (length: " + textoBusqueda.length() + ")");
+            System.out.println("Estado filtro: " + estadoFiltro);
+
             List<Expediente> resultados;
 
+            // Si no hay filtros, listar todos
             if (textoBusqueda.isEmpty() && estadoFiltro == null) {
+                System.out.println("→ Sin filtros, listando todos");
                 resultados = expedienteService.listarTodos();
             } else {
+                System.out.println("→ Buscando con criterios...");
+                System.out.println("   Parámetro número: " + (textoBusqueda.isEmpty() ? "null" : textoBusqueda));
+                System.out.println("   Parámetro cliente: " + (textoBusqueda.isEmpty() ? "null" : textoBusqueda));
+                System.out.println("   Parámetro estado: " + estadoFiltro);
+
                 resultados = expedienteService.buscarPorCriterios(
                         textoBusqueda.isEmpty() ? null : textoBusqueda,
                         textoBusqueda.isEmpty() ? null : textoBusqueda,
-                        estadoFiltro,
-                        null
+                        estadoFiltro
                 );
+            }
+
+            System.out.println("📊 Resultados encontrados: " + resultados.size());
+
+            if (!resultados.isEmpty()) {
+                System.out.println("✅ Primeros resultados:");
+                for (int i = 0; i < Math.min(3, resultados.size()); i++) {
+                    Expediente exp = resultados.get(i);
+                    System.out.println("  - " + exp.getNumero() + " | " + exp.getCliente());
+                }
             }
 
             listaExpedientes.clear();
             listaExpedientes.addAll(resultados);
 
+            System.out.println("📋 Items en tabla: " + listaExpedientes.size());
+            System.out.println("========================================");
+
         } catch (SQLException e) {
+            System.err.println("❌ ERROR en búsqueda: " + e.getMessage());
+            e.printStackTrace();
             mostrarError("Error al buscar: " + e.getMessage());
         }
     }
@@ -1729,7 +1992,8 @@ public class MainController {
     private HBox crearBarraEstado() {
         HBox barra = new HBox();
         barra.setPadding(new Insets(5));
-        barra.setStyle("-fx-background-color: #ecf0f1;");
+        //barra.setStyle("-fx-background-color: #ecf0f1;");
+        barra.getStyleClass().add("status-bar");
 
         Label lblEstado = new Label("✅ Sistema listo");
         barra.getChildren().add(lblEstado);
@@ -1759,7 +2023,7 @@ public class MainController {
         txtBuscarCliente.textProperty().addListener((obs, old, val) -> buscarClientes());
 
         Button btnNuevoCliente = new Button("➕ Nuevo Cliente");
-        btnNuevoCliente.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevoCliente.getStyleClass().addAll("button", "button-success");
         btnNuevoCliente.setOnAction(e -> abrirFormularioCliente(null));
 
         Button btnActualizar = new Button("🔄 Actualizar");
@@ -1862,6 +2126,12 @@ public class MainController {
         stage.setTitle("Juridix - Sistema de Gestión Jurídica");
         stage.setMaximized(true);
         stage.show();
+
+        // ========== MOSTRAR POPUP DE EVENTOS DEL DÍA ==========
+        // Usar Platform.runLater para que se muestre después de que cargue la ventana principal
+        javafx.application.Platform.runLater(() -> {
+            mostrarPopupEventosDelDia();
+        });
     }
     // ==================== OPERACIONES DE CLIENTES ====================
 
@@ -2021,7 +2291,7 @@ public class MainController {
         botones.setPadding(new Insets(15, 0, 0, 0));
 
         Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> {
             try {
                 Cliente cli = cliente != null ? cliente : new Cliente();
@@ -2082,13 +2352,21 @@ public class MainController {
         ventana.setTitle("Cliente: " + cliente.getNombreCompleto());
         ventana.setMaximized(true);
 
+
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(15));
 
         // ========== TOP: Header con datos básicos del cliente ==========
         VBox header = new VBox(10);
         header.setPadding(new Insets(15));
-        header.setStyle("-fx-background-color: #3498db; -fx-background-radius: 5;");
+        //header.setStyle("-fx-background-color: #3498db; -fx-background-radius: 5;");
+        header.setStyle("-fx-background-color: linear-gradient(to right, #3498db, #2980b9); " +
+                "-fx-background-radius: 5;");
+
+        // Grid con información visible
+        GridPane infoGrid = new GridPane();
+        infoGrid.setHgap(30);
+        infoGrid.setVgap(5);
 
         Label lblNombre = new Label(cliente.getNombreCompleto());
         lblNombre.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: white;");
@@ -2109,15 +2387,87 @@ public class MainController {
         lblEstado.setStyle("-fx-text-fill: " + (cliente.isActivo() ? "#2ecc71" : "#e74c3c") + "; -fx-font-size: 14px; -fx-font-weight: bold;");
 
         infoDatos.getChildren().addAll(lblDni, lblTelefono, lblEmail, lblEstado);
+        Button btnEliminarCliente = new Button("🗑️ Eliminar Cliente");
+        btnEliminarCliente.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnEliminarCliente.setOnAction(a -> {
+            try {
+                // Verificar expedientes y documentos ANTES de confirmar
+                ExpedienteDAO expedienteDAO = new ExpedienteDAO();
+                List<Expediente> expedientes = expedienteDAO.listarPorClienteId(cliente.getId());
+
+                int cantDocumentos = documentoClienteService.listarPorCliente(cliente.getId()).size();
+
+                // Construir mensaje de confirmación con detalles
+                StringBuilder mensaje = new StringBuilder();
+                mensaje.append("¿Está seguro de eliminar el cliente: ").append(cliente.getNombreCompleto()).append("?\n\n");
+
+                boolean tieneAsociaciones = false;
+
+                if (!expedientes.isEmpty()) {
+                    mensaje.append("⚠️ ATENCIÓN: Este cliente tiene ").append(expedientes.size())
+                            .append(" expediente(s) asociado(s):\n");
+                    for (Expediente exp : expedientes) {
+                        mensaje.append("   • ").append(exp.getNumero()).append(" - ").append(exp.getCaratula()).append("\n");
+                    }
+                    mensaje.append("\n");
+                    tieneAsociaciones = true;
+                }
+
+                if (cantDocumentos > 0) {
+                    mensaje.append("📎 Este cliente tiene ").append(cantDocumentos).append(" documento(s) cargado(s).\n\n");
+                    tieneAsociaciones = true;
+                }
+
+                if (tieneAsociaciones) {
+                    mensaje.append("❌ NO SE PUEDE ELIMINAR.\n");
+                    mensaje.append("Primero debe eliminar o reasignar los expedientes y documentos asociados.");
+
+                    Alert alerta = new Alert(Alert.AlertType.ERROR);
+                    alerta.setTitle("No se puede eliminar");
+                    alerta.setHeaderText("Cliente con datos asociados");
+                    alerta.setContentText(mensaje.toString());
+                    alerta.showAndWait();
+                    return;
+                }
+
+                // Si no tiene asociaciones, pedir confirmación normal
+                mensaje.append("Esta acción no se puede deshacer.");
+
+                Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
+                confirmacion.setTitle("Confirmar eliminación");
+                confirmacion.setHeaderText("Eliminar cliente");
+                confirmacion.setContentText(mensaje.toString());
+
+                if (confirmacion.showAndWait().get() == ButtonType.OK) {
+                    clienteService.eliminarCliente(cliente.getId());
+                    mostrarInfo("Cliente eliminado correctamente");
+                    ventana.close();
+                    cargarClientes();
+                }
+
+            } catch (IllegalStateException ex) {
+                // Error de validación de negocio
+                Alert alerta = new Alert(Alert.AlertType.ERROR);
+                alerta.setTitle("No se puede eliminar");
+                alerta.setHeaderText("Validación fallida");
+                alerta.setContentText(ex.getMessage());
+                alerta.showAndWait();
+            } catch (SQLException ex) {
+                mostrarError("Error al eliminar cliente: " + ex.getMessage());
+            }
+
+        });
+
 
         Button btnEditar = new Button("✏️ Editar Cliente");
         btnEditar.setStyle("-fx-background-color: white; -fx-text-fill: #3498db; -fx-font-weight: bold;");
         btnEditar.setOnAction(e -> {
             abrirFormularioCliente(cliente);
+
             ventana.close();
         });
 
-        header.getChildren().addAll(lblNombre, infoDatos, btnEditar);
+        header.getChildren().addAll(lblNombre, infoDatos, btnEditar, btnEliminarCliente);
         root.setTop(header);
 
         // ========== CENTER: SplitPane con datos, expedientes y documentos ==========
@@ -2133,7 +2483,7 @@ public class MainController {
         splitDerecha.setOrientation(javafx.geometry.Orientation.VERTICAL);
         splitDerecha.setDividerPositions(0.5);
 
-        VBox panelExpedientes = crearPanelExpedientesCliente(cliente);
+        VBox panelExpedientes = crearPanelExpedientesCliente(cliente,ventana);
         VBox panelDocumentos = crearPanelDocumentosCliente(cliente);
 
         splitDerecha.getItems().addAll(panelExpedientes, panelDocumentos);
@@ -2215,7 +2565,7 @@ public class MainController {
     }
 
     // ========== Panel de expedientes del cliente ==========
-    private VBox crearPanelExpedientesCliente(Cliente cliente) {
+    private VBox crearPanelExpedientesCliente(Cliente cliente, Stage ventanaCliente) {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(15));
 
@@ -2226,13 +2576,27 @@ public class MainController {
         titulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
         Button btnNuevoExpediente = new Button("➕ Nuevo Expediente");
-        btnNuevoExpediente.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+        btnNuevoExpediente.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
         btnNuevoExpediente.setOnAction(e -> {
-            // Pre-cargar el cliente en el formulario de expediente
+            // Cerrar la ventana del cliente
+            ventanaCliente.close();
+
+            // Cambiar a la pestaña de expedientes
+            TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
+            if (tabPane != null) {
+                Tab tabExpedientes = tabPane.getTabs().stream()
+                        .filter(t -> t.getText().contains("Expedientes"))
+                        .findFirst()
+                        .orElse(null);
+                if (tabExpedientes != null) {
+                    tabPane.getSelectionModel().select(tabExpedientes);
+                }
+            }
+
+            // Pre-cargar el cliente
             limpiarFormularioExpediente();
             txtCliente.setText(cliente.getNombreCompleto());
-            // Puedes cambiar a la pestaña de expedientes si quieres
-            mostrarInfo("Complete los datos del expediente y guarde");
+            mostrarInfo("Complete los datos del nuevo expediente para: " + cliente.getNombreCompleto());
         });
 
         Region spacer = new Region();
@@ -2240,7 +2604,7 @@ public class MainController {
 
         header.getChildren().addAll(titulo, spacer, btnNuevoExpediente);
 
-        // Tabla de expedientes
+        // ========== TABLA DE EXPEDIENTES ==========
         TableView<Expediente> tablaExp = new TableView<>();
         ObservableList<Expediente> listaExp = FXCollections.observableArrayList();
         tablaExp.setItems(listaExp);
@@ -2271,11 +2635,51 @@ public class MainController {
             }
         });
 
-        // Cargar expedientes del cliente
+        // ========== CARGAR EXPEDIENTES DEL CLIENTE (AQUÍ ES DONDE DEBE ESTAR) ==========
         try {
-            List<Expediente> expedientes = new ExpedienteDAO().listarPorClienteId(cliente.getId());
+            System.out.println("========================================");
+            System.out.println("🔍 DEBUG: Cargando expedientes del cliente");
+            System.out.println("Cliente ID: " + cliente.getId());
+            System.out.println("Cliente Nombre: " + cliente.getNombreCompleto());
+
+            ExpedienteDAO expedienteDAO = new ExpedienteDAO();
+            List<Expediente> expedientes = expedienteDAO.listarPorClienteId(cliente.getId());
+
+            System.out.println("📊 Cantidad de expedientes encontrados: " + expedientes.size());
+
+            if (expedientes.isEmpty()) {
+                System.out.println("⚠️ LISTA VACÍA - Verificando en BD...");
+
+                // Verificar directamente en la BD
+                try (Connection conn = Database.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                             "SELECT id, numero, caratula, cliente_id FROM expedientes WHERE cliente_id = ?")) {
+                    ps.setInt(1, cliente.getId());
+                    ResultSet rs = ps.executeQuery();
+
+                    System.out.println("🔍 Consulta directa a BD:");
+                    while (rs.next()) {
+                        System.out.println("  - ID: " + rs.getInt("id") +
+                                " | Número: " + rs.getString("numero") +
+                                " | cliente_id: " + rs.getInt("cliente_id"));
+                    }
+                }
+            } else {
+                System.out.println("✅ Expedientes encontrados:");
+                for (Expediente exp : expedientes) {
+                    System.out.println("  - " + exp.getNumero() + " | " + exp.getCaratula() +
+                            " | cliente_id: " + exp.getClienteId());
+                }
+            }
+
+            listaExp.clear();
             listaExp.addAll(expedientes);
+            System.out.println("📋 Items en ObservableList: " + listaExp.size());
+            System.out.println("========================================");
+
         } catch (SQLException e) {
+            System.err.println("❌ ERROR: " + e.getMessage());
+            e.printStackTrace();
             mostrarError("Error al cargar expedientes: " + e.getMessage());
         }
 
@@ -2335,6 +2739,8 @@ public class MainController {
             private final Button btnEliminar = new Button("🗑️");
 
             {
+                //boton con nuevo estilo
+                btnAbrir.getStyleClass().addAll("button", "button-info");
                 btnAbrir.setOnAction(e -> {
                     DocumentoCliente doc = getTableView().getItems().get(getIndex());
                     try {
@@ -2344,20 +2750,31 @@ public class MainController {
                     }
                 });
 
-                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.getStyleClass().addAll("button", "button-danger");
                 btnEliminar.setOnAction(e -> {
                     DocumentoCliente doc = getTableView().getItems().get(getIndex());
-                    Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
-                    confirmacion.setHeaderText("¿Eliminar este documento?");
-                    confirmacion.setContentText(doc.getNombreOriginal());
+
+                    StringBuilder mensaje = new StringBuilder();
+                    mensaje.append("¿Eliminar el documento?\n\n");
+                    mensaje.append("📄 ").append(doc.getNombreOriginal()).append("\n");
+                    mensaje.append("📦 Tamaño: ").append(doc.getTamanioFormateado()).append("\n");
+                    mensaje.append("📅 Subido: ").append(doc.getFechaSubida().format(
+                            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))).append("\n\n");
+                    mensaje.append("⚠️ El archivo será eliminado del sistema de archivos.\n");
+                    mensaje.append("Esta acción no se puede deshacer.");
+
+                    Alert confirmacion = new Alert(Alert.AlertType.WARNING);
+                    confirmacion.setTitle("Confirmar eliminación");
+                    confirmacion.setHeaderText("Eliminar documento");
+                    confirmacion.setContentText(mensaje.toString());
 
                     if (confirmacion.showAndWait().get() == ButtonType.OK) {
                         try {
                             documentoClienteService.eliminarDocumento(doc.getId());
                             listaDocs.remove(doc);
-                            mostrarInfo("Documento eliminado");
+                            mostrarInfo("Documento eliminado del sistema");
                         } catch (Exception ex) {
-                            mostrarError("Error: " + ex.getMessage());
+                            mostrarError("Error al eliminar: " + ex.getMessage());
                         }
                     }
                 });
@@ -2445,7 +2862,7 @@ public class MainController {
         botones.setAlignment(Pos.CENTER);
 
         Button btnSubir = new Button("⬆️ Subir");
-        btnSubir.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnSubir.getStyleClass().addAll("button", "button-success");
         btnSubir.setOnAction(e -> {
             String nombreFinal = txtNombrePersonalizado.getText().trim().isEmpty() ?
                     archivoSeleccionado[0].getName() : txtNombrePersonalizado.getText().trim();
@@ -2629,7 +3046,8 @@ public class MainController {
         txtResultadoPlazo.setStyle("-fx-background-color: #ecf0f1; -fx-font-weight: bold; -fx-font-size: 14px;");
 
         Button btnCalcular = new Button("🔢 Calcular Plazo");
-        btnCalcular.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
+        //btnCalcular.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnCalcular.getStyleClass().addAll("button", "button-info");
         btnCalcular.setOnAction(e -> {
             LocalDate fechaInicio = dpFechaInicioPlazo.getValue();
             int dias = spDias.getValue();
@@ -2642,7 +3060,7 @@ public class MainController {
         });
 
         Button btnAgregarAgenda = new Button("📅 Agregar a Agenda");
-        btnAgregarAgenda.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+        btnAgregarAgenda.getStyleClass().addAll("button", "button-success");
         btnAgregarAgenda.setOnAction(e -> {
             String resultado = txtResultadoPlazo.getText();
             if (!resultado.isEmpty()) {
@@ -2872,7 +3290,8 @@ public class MainController {
 
         // Botón nuevo honorario
         Button btnNuevo = new Button("➕ Nuevo Honorario");
-        btnNuevo.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevo.getStyleClass().addAll("button", "button-success");
+
         btnNuevo.setOnAction(e -> {
             Expediente exp = cmbExpedientes.getValue();
             if (exp != null) {
@@ -2922,7 +3341,7 @@ public class MainController {
                     abrirFormularioHonorario(h, h.getExpedienteId());
                 });
 
-                btnCobrar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+                btnCobrar.getStyleClass().addAll("button", "button-success");
                 btnCobrar.setOnAction(e -> {
                     Honorario h = getTableView().getItems().get(getIndex());
                     try {
@@ -2934,7 +3353,7 @@ public class MainController {
                     }
                 });
 
-                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.getStyleClass().addAll("button", "button-danger");
                 btnEliminar.setOnAction(e -> {
                     Honorario h = getTableView().getItems().get(getIndex());
                     if (mostrarConfirmacion("¿Eliminar este honorario?")) {
@@ -3068,7 +3487,7 @@ public class MainController {
         botones.setAlignment(Pos.CENTER);
 
         Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> {
             try {
                 Honorario h = honorario != null ? honorario : new Honorario();
@@ -3125,7 +3544,7 @@ public class MainController {
         panel.setPadding(new Insets(15));
 
         Button btnNuevo = new Button("➕ Nuevo Gasto");
-        btnNuevo.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevo.getStyleClass().addAll("button", "button-danger");
         btnNuevo.setOnAction(e -> {
             Expediente exp = cmbExpedientes.getValue();
             if (exp != null) {
@@ -3168,7 +3587,7 @@ public class MainController {
                     abrirFormularioGasto(g, g.getExpedienteId());
                 });
 
-                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.getStyleClass().addAll("button", "button-danger");
                 btnEliminar.setOnAction(e -> {
                     Gasto g = getTableView().getItems().get(getIndex());
                     if (mostrarConfirmacion("¿Eliminar este gasto?")) {
@@ -3271,7 +3690,7 @@ public class MainController {
         botones.setAlignment(Pos.CENTER);
 
         Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> {
             try {
                 Gasto g = gasto != null ? gasto : new Gasto();
@@ -3441,8 +3860,8 @@ public class MainController {
 
         // Botón Registrar Pago
         Button btnRegistrar = new Button("💰 Registrar Pago");
-        btnRegistrar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; " +
-                "-fx-font-weight: bold; -fx-padding: 10 20;");
+        btnRegistrar.getStyleClass().addAll("button", "button-success");
+
 
         btnRegistrar.setOnAction(e -> {
             try {
@@ -3473,7 +3892,8 @@ public class MainController {
                 pago.setReferencia(txtReferencia.getText().trim());
                 pago.setConcepto(txtConcepto.getText().trim());
                 pago.setObservaciones(txtObservaciones.getText().trim());
-                pago.setId(usuarioActual.getId());
+                pago.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+
 
                 pagoService.crearPago(pago);
 
@@ -3511,7 +3931,15 @@ public class MainController {
         panel.getChildren().addAll(titulo, formPago, btnRegistrar, new Separator(),
                 lblHistorial, tablaPagos);
 
-        return panel;
+        ScrollPane scroll = new ScrollPane(panel);
+        scroll.setFitToWidth(true);
+        scroll.setFitToHeight(true);
+
+        VBox container = new VBox(scroll);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return container;
+        //return panel;
+        //POSIBLE ERROR!!!!
     }
 
     private void cargarTablaPagos(TableView<Pago> tabla, Integer expedienteId) {
@@ -3721,10 +4149,599 @@ public class MainController {
         return resultado.isPresent() && resultado.get() == ButtonType.OK;
     }
 
+    // ========== CREAR PANEL DE USUARIOS ==========
+    private VBox crearPanelUsuarios() {
+        VBox panel = new VBox(15);
+        panel.setPadding(new Insets(15));
+
+        Label titulo = new Label("👥 Gestión de Usuarios");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        // Barra de control
+        HBox barraControl = new HBox(10);
+        barraControl.setAlignment(Pos.CENTER_LEFT);
+
+        Button btnNuevo = new Button("➕ Nuevo Usuario");
+        btnNuevo.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnNuevo.setOnAction(e -> abrirFormularioUsuario(null));
+
+        Button btnActualizar = new Button("🔄 Actualizar");
+        btnActualizar.setOnAction(e -> cargarUsuarios());
+
+        barraControl.getChildren().addAll(btnNuevo, btnActualizar);
+
+        // Tabla de usuarios
+        TableView<Usuario> tablaUsuarios = new TableView<>();
+        ObservableList<Usuario> listaUsuarios = FXCollections.observableArrayList();
+        tablaUsuarios.setItems(listaUsuarios);
+
+        TableColumn<Usuario, String> colUsername = new TableColumn<>("Usuario");
+        colUsername.setCellValueFactory(new PropertyValueFactory<>("username"));
+        colUsername.setPrefWidth(150);
+
+        TableColumn<Usuario, String> colNombre = new TableColumn<>("Nombre Completo");
+        colNombre.setCellValueFactory(new PropertyValueFactory<>("nombreCompleto"));
+        colNombre.setPrefWidth(250);
+
+        TableColumn<Usuario, RolUsuario> colRol = new TableColumn<>("Rol");
+        colRol.setCellValueFactory(new PropertyValueFactory<>("rol"));
+        colRol.setPrefWidth(150);
+
+        TableColumn<Usuario, String> colEmail = new TableColumn<>("Email");
+        colEmail.setCellValueFactory(new PropertyValueFactory<>("email"));
+        colEmail.setPrefWidth(200);
+
+        TableColumn<Usuario, Boolean> colActivo = new TableColumn<>("Estado");
+        colActivo.setCellValueFactory(new PropertyValueFactory<>("activo"));
+        colActivo.setPrefWidth(100);
+        colActivo.setCellFactory(column -> new TableCell<Usuario, Boolean>() {
+            @Override
+            protected void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item ? "✅ Activo" : "❌ Inactivo");
+                    setStyle(item ? "-fx-text-fill: #27ae60;" : "-fx-text-fill: #e74c3c;");
+                }
+            }
+        });
+
+        TableColumn<Usuario, LocalDateTime> colUltimoAcceso = new TableColumn<>("Último Acceso");
+        colUltimoAcceso.setCellValueFactory(new PropertyValueFactory<>("ultimoAcceso"));
+        colUltimoAcceso.setPrefWidth(150);
+        colUltimoAcceso.setCellFactory(column -> new TableCell<Usuario, LocalDateTime>() {
+            @Override
+            protected void updateItem(LocalDateTime item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText("Nunca");
+                } else {
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+                    setText(item.format(formatter));
+                }
+            }
+        });
+
+        // Columna acciones
+        TableColumn<Usuario, Void> colAcciones = new TableColumn<>("Acciones");
+        colAcciones.setPrefWidth(200);
+        colAcciones.setCellFactory(param -> new TableCell<>() {
+            private final Button btnEditar = new Button("✏️ Editar");
+            private final Button btnEliminar = new Button("🗑️ Eliminar");
+
+            {
+                btnEditar.setOnAction(e -> {
+                    Usuario usuario = getTableView().getItems().get(getIndex());
+                    abrirFormularioUsuario(usuario);
+                });
+
+                btnEliminar.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+                btnEliminar.setOnAction(e -> {
+                    Usuario usuario = getTableView().getItems().get(getIndex());
+
+                    // No permitir eliminar al usuario logueado
+                    if (usuario.getId().equals(SesionUsuario.getUsuarioActual().getId())) {
+                        mostrarError("No puedes eliminar tu propio usuario");
+                        return;
+                    }
+
+                    try {
+                        // Contar registros creados por este usuario
+                        ExpedienteDAO expedienteDAO = new ExpedienteDAO();
+                        int expedientesCreados = expedienteDAO.contarPorCreador(usuario.getId());
+
+                        StringBuilder mensaje = new StringBuilder();
+                        mensaje.append("¿Eliminar el usuario?\n\n");
+                        mensaje.append("👤 ").append(usuario.getUsername()).append("\n");
+                        mensaje.append("    ").append(usuario.getNombreCompleto()).append("\n");
+                        mensaje.append("🎭 Rol: ").append(usuario.getRol()).append("\n\n");
+
+                        if (expedientesCreados > 0) {
+                            mensaje.append("⚠️ Este usuario ha creado ").append(expedientesCreados).append(" expediente(s).\n");
+                            mensaje.append("Los expedientes NO serán eliminados, pero quedarán sin creador asociado.\n\n");
+                        }
+
+                        mensaje.append("Esta acción no se puede deshacer.");
+
+                        Alert confirmacion = new Alert(Alert.AlertType.WARNING);
+                        confirmacion.setTitle("Confirmar eliminación");
+                        confirmacion.setHeaderText("Eliminar usuario");
+                        confirmacion.setContentText(mensaje.toString());
+
+                        if (confirmacion.showAndWait().get() == ButtonType.OK) {
+                            UsuarioService usuarioService = new UsuarioService();
+                            usuarioService.eliminarUsuario(usuario.getId());
+                            listaUsuarios.remove(usuario);
+                            mostrarInfo("Usuario eliminado correctamente");
+                        }
+
+                    } catch (SQLException ex) {
+                        mostrarError("Error al eliminar: " + ex.getMessage());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    HBox botones = new HBox(5, btnEditar, btnEliminar);
+                    setGraphic(botones);
+                }
+            }
+        });
+
+        tablaUsuarios.getColumns().addAll(colUsername, colNombre, colRol, colEmail, colActivo, colUltimoAcceso, colAcciones);
+
+        // Cargar usuarios
+        cargarUsuarios(listaUsuarios);
+
+        panel.getChildren().addAll(titulo, barraControl, tablaUsuarios);
+        VBox.setVgrow(tablaUsuarios, Priority.ALWAYS);
+
+        return panel;
+    }
+
+    // ========== FORMULARIO DE USUARIO ==========
+    private void abrirFormularioUsuario(Usuario usuario) {
+        Stage ventana = new Stage();
+        ventana.initModality(Modality.APPLICATION_MODAL);
+        ventana.setTitle(usuario == null ? "Nuevo Usuario" : "Editar Usuario - " + usuario.getUsername());
+
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+
+        // Username
+        Label lblUsername = new Label("Usuario *:");
+        TextField txtUsername = new TextField();
+        txtUsername.setPromptText("Nombre de usuario único");
+        if (usuario != null) {
+            txtUsername.setText(usuario.getUsername());
+            txtUsername.setDisable(true); // No permitir cambiar username
+        }
+
+        // Password
+        Label lblPassword = new Label(usuario == null ? "Contraseña *:" : "Nueva Contraseña:");
+        PasswordField txtPassword = new PasswordField();
+        txtPassword.setPromptText(usuario == null ? "Contraseña" : "Dejar vacío para mantener la actual");
+
+        // Confirmar Password
+        Label lblConfirmarPassword = new Label("Confirmar Contraseña:");
+        PasswordField txtConfirmarPassword = new PasswordField();
+
+        // Nombre completo
+        Label lblNombre = new Label("Nombre Completo:");
+        TextField txtNombre = new TextField();
+        if (usuario != null) txtNombre.setText(usuario.getNombreCompleto());
+
+        // Email
+        Label lblEmail = new Label("Email:");
+        TextField txtEmail = new TextField();
+        if (usuario != null) txtEmail.setText(usuario.getEmail());
+
+        // Rol
+        Label lblRol = new Label("Rol *:");
+        ComboBox<RolUsuario> cmbRol = new ComboBox<>();
+        cmbRol.setItems(FXCollections.observableArrayList(RolUsuario.values()));
+        cmbRol.setMaxWidth(Double.MAX_VALUE);
+        if (usuario != null) {
+            cmbRol.setValue(usuario.getRol());
+        } else {
+            cmbRol.setValue(RolUsuario.SECRETARIA);
+        }
+
+        // Activo
+        CheckBox chkActivo = new CheckBox("Usuario activo");
+        chkActivo.setSelected(usuario == null || usuario.isActivo());
+
+        // Layout
+        int row = 0;
+        grid.add(lblUsername, 0, row);
+        grid.add(txtUsername, 1, row++);
+
+        grid.add(lblPassword, 0, row);
+        grid.add(txtPassword, 1, row++);
+
+        grid.add(lblConfirmarPassword, 0, row);
+        grid.add(txtConfirmarPassword, 1, row++);
+
+        grid.add(lblNombre, 0, row);
+        grid.add(txtNombre, 1, row++);
+
+        grid.add(lblEmail, 0, row);
+        grid.add(txtEmail, 1, row++);
+
+        grid.add(lblRol, 0, row);
+        grid.add(cmbRol, 1, row++);
+
+        grid.add(chkActivo, 1, row++);
+
+        ColumnConstraints col1 = new ColumnConstraints();
+        col1.setMinWidth(150);
+        ColumnConstraints col2 = new ColumnConstraints();
+        col2.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().addAll(col1, col2);
+
+        // Botones
+        HBox botones = new HBox(10);
+        botones.setAlignment(Pos.CENTER);
+        botones.setPadding(new Insets(15, 0, 0, 0));
+
+        Button btnGuardar = new Button("💾 Guardar");
+        btnGuardar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardar.setOnAction(e -> {
+            try {
+                // Validaciones
+                if (usuario == null && txtUsername.getText().trim().isEmpty()) {
+                    mostrarError("El nombre de usuario es obligatorio");
+                    return;
+                }
+
+                if (usuario == null && txtPassword.getText().isEmpty()) {
+                    mostrarError("La contraseña es obligatoria");
+                    return;
+                }
+
+                if (!txtPassword.getText().isEmpty() && !txtPassword.getText().equals(txtConfirmarPassword.getText())) {
+                    mostrarError("Las contraseñas no coinciden");
+                    return;
+                }
+
+                if (cmbRol.getValue() == null) {
+                    mostrarError("Debe seleccionar un rol");
+                    return;
+                }
+
+                UsuarioService usuarioService = new UsuarioService();
+                Usuario u = usuario != null ? usuario : new Usuario();
+
+                if (usuario == null) {
+                    u.setUsername(txtUsername.getText().trim());
+                }
+
+                if (!txtPassword.getText().isEmpty()) {
+                    u.setPasswordHash(PasswordUtil.hash(txtPassword.getText()));
+                }
+
+                u.setNombreCompleto(txtNombre.getText().trim());
+                u.setEmail(txtEmail.getText().trim());
+                u.setRol(cmbRol.getValue());
+                u.setActivo(chkActivo.isSelected());
+
+                if (usuario == null) {
+                    usuarioService.crearUsuario(u);
+                    mostrarInfo("Usuario creado correctamente");
+                } else {
+                    usuarioService.actualizarUsuario(u);
+                    mostrarInfo("Usuario actualizado correctamente");
+                }
+
+                cargarUsuarios();
+                ventana.close();
+
+            } catch (Exception ex) {
+                mostrarError("Error: " + ex.getMessage());
+            }
+        });
+
+        Button btnCancelar = new Button("❌ Cancelar");
+        btnCancelar.setOnAction(e -> ventana.close());
+
+        botones.getChildren().addAll(btnGuardar, btnCancelar);
+        form.getChildren().addAll(grid, botones);
+
+        ScrollPane scroll = new ScrollPane(form);
+        scroll.setFitToWidth(true);
+
+        Scene scene = new Scene(scroll, 500, 550);
+        ventana.setScene(scene);
+        ventana.showAndWait();
+    }
+
+    // ========== CARGAR USUARIOS ==========
+    private void cargarUsuarios() {
+        // Buscar la tabla en el panel
+        TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
+        if (tabPane != null) {
+            Tab tabUsuarios = tabPane.getTabs().stream().filter(t -> t.getText().contains("Usuarios")).findFirst().orElse(null);
+
+            if (tabUsuarios != null) {
+                VBox contenido = (VBox) tabUsuarios.getContent();
+                @SuppressWarnings("unchecked") TableView<Usuario> tabla = (TableView<Usuario>) contenido.lookup("TableView");
+                if (tabla != null) {
+                    cargarUsuarios(tabla.getItems());
+                }
+            }
+        }
+    }
+
+    private void cargarUsuarios(ObservableList<Usuario> lista) {
+        try {
+            UsuarioService usuarioService = new UsuarioService();
+            List<Usuario> usuarios = usuarioService.listarTodos();
+            lista.clear();
+            lista.addAll(usuarios);
+        } catch (SQLException e) {
+            mostrarError("Error al cargar usuarios: " + e.getMessage());
+        }
+    }
+
+
+
+// ========== MÉTODO PARA MOSTRAR POPUP ==========
+    private void mostrarPopupEventosDelDia() {
+        try {
+            Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
+            LocalDate hoy = LocalDate.now();
+
+            // Obtener eventos de HOY
+            List<EventoAgenda> eventosHoy = agendaService.listarPorFecha(hoy).stream()
+                    .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
+                    .toList();
+
+            // Si no hay eventos, no mostrar nada
+            if (eventosHoy.isEmpty()) {
+                return;
+            }
+
+            // Crear ventana de popup
+            Stage popup = new Stage();
+            popup.initModality(Modality.NONE); // No modal para no bloquear
+            popup.setTitle("🔔 Eventos de Hoy");
+            popup.setAlwaysOnTop(true); // Mantener al frente
+
+            VBox root = new VBox(15);
+            root.setPadding(new Insets(20));
+            root.setStyle("-fx-background-color: white;");
+
+            // Header
+            HBox header = new HBox(10);
+            header.setAlignment(Pos.CENTER_LEFT);
+            header.setPadding(new Insets(15));
+            header.setStyle("-fx-background-color: linear-gradient(to right, #e74c3c, #c0392b); " +
+                    "-fx-background-radius: 10 10 0 0;");
+
+            Label lblIcono = new Label("⚠️");
+            lblIcono.setStyle("-fx-font-size: 32px;");
+
+            VBox textoHeader = new VBox(3);
+            Label lblTitulo = new Label("¡Tienes eventos pendientes HOY!");
+            lblTitulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
+
+            Label lblSubtitulo = new Label(LocalDate.now().format(
+                    DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", new java.util.Locale("es", "ES"))));
+            lblSubtitulo.setStyle("-fx-font-size: 13px; -fx-text-fill: white;");
+
+            textoHeader.getChildren().addAll(lblTitulo, lblSubtitulo);
+            header.getChildren().addAll(lblIcono, textoHeader);
+
+            // Lista de eventos
+            VBox listaEventos = new VBox(10);
+            listaEventos.setPadding(new Insets(10));
+
+            DateTimeFormatter horaFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+            for (EventoAgenda evento : eventosHoy) {
+                HBox itemEvento = new HBox(15);
+                itemEvento.setPadding(new Insets(15));
+                itemEvento.setAlignment(Pos.CENTER_LEFT);
+                itemEvento.setStyle("-fx-background-color: #f8f9fa; " +
+                        "-fx-border-color: #dee2e6; " +
+                        "-fx-border-width: 1; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-background-radius: 8;");
+
+                // Icono según tipo
+                String icono = switch (evento.getTipo()) {
+                    case AUDIENCIA -> "⚖️";
+                    case VENCIMIENTO -> "⏰";
+                    case REUNION -> "👥";
+                    case PRESENTACION -> "📝";
+                    default -> "📌";
+                };
+
+                Label lblIconoEvento = new Label(icono);
+                lblIconoEvento.setStyle("-fx-font-size: 28px;");
+
+                VBox detallesEvento = new VBox(5);
+
+                Label lblHora = new Label(evento.getFechaHora().format(horaFormatter));
+                lblHora.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
+
+                Label lblTituloEvento = new Label(evento.getTitulo());
+                lblTituloEvento.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
+
+                Label lblTipo = new Label(evento.getTipo().getDisplayName());
+                lblTipo.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
+
+                if (evento.getUbicacion() != null && !evento.getUbicacion().isEmpty()) {
+                    Label lblUbicacion = new Label("📍 " + evento.getUbicacion());
+                    lblUbicacion.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
+                    detallesEvento.getChildren().add(lblUbicacion);
+                }
+
+                detallesEvento.getChildren().addAll(lblHora, lblTituloEvento, lblTipo);
+
+                // Calcular tiempo restante
+                LocalDateTime ahora = LocalDateTime.now();
+                long minutosRestantes = java.time.Duration.between(ahora, evento.getFechaHora()).toMinutes();
+
+                VBox tiempoRestante = new VBox(5);
+                tiempoRestante.setAlignment(Pos.CENTER);
+
+                if (minutosRestantes > 0) {
+                    String tiempoTexto;
+                    if (minutosRestantes < 60) {
+                        tiempoTexto = "En " + minutosRestantes + " min";
+                    } else {
+                        long horas = minutosRestantes / 60;
+                        tiempoTexto = "En " + horas + "h " + (minutosRestantes % 60) + "m";
+                    }
+
+                    Label lblTiempo = new Label(tiempoTexto);
+                    lblTiempo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; " +
+                            "-fx-text-fill: " + (minutosRestantes < 60 ? "#e74c3c" : "#f39c12") + ";");
+                    tiempoRestante.getChildren().add(lblTiempo);
+                } else if (minutosRestantes > -60) {
+                    Label lblTiempo = new Label("¡AHORA!");
+                    lblTiempo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
+                    tiempoRestante.getChildren().add(lblTiempo);
+                }
+
+                Region spacer = new Region();
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+
+                itemEvento.getChildren().addAll(lblIconoEvento, detallesEvento, spacer, tiempoRestante);
+                listaEventos.getChildren().add(itemEvento);
+            }
+
+            ScrollPane scrollEventos = new ScrollPane(listaEventos);
+            scrollEventos.setFitToWidth(true);
+            scrollEventos.setPrefHeight(300);
+            scrollEventos.setMaxHeight(400);
+            scrollEventos.setStyle("-fx-background-color: transparent;");
+
+            // Botones
+            HBox botones = new HBox(10);
+            botones.setAlignment(Pos.CENTER_RIGHT);
+            botones.setPadding(new Insets(10, 0, 0, 0));
+
+            Button btnVerAgenda = new Button("📅 Ver Agenda Completa");
+            btnVerAgenda.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
+            btnVerAgenda.setOnAction(e -> {
+                // Cambiar a la pestaña de agenda
+                TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
+                if (tabPane != null) {
+                    Tab tabAgenda = tabPane.getTabs().stream()
+                            .filter(t -> t.getText().contains("Agenda"))
+                            .findFirst()
+                            .orElse(null);
+                    if (tabAgenda != null) {
+                        tabPane.getSelectionModel().select(tabAgenda);
+                    }
+                }
+                popup.close();
+            });
+
+            Button btnCerrar = new Button("✅ Entendido");
+            btnCerrar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+            btnCerrar.setOnAction(e -> popup.close());
+
+            botones.getChildren().addAll(btnVerAgenda, btnCerrar);
+
+            root.getChildren().addAll(header, scrollEventos, botones);
+
+            Scene scene = new Scene(root, 550, Math.min(500, 200 + (eventosHoy.size() * 110)));
+            popup.setScene(scene);
+
+            // Posicionar en la esquina inferior derecha
+            popup.setX(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxX() - 570);
+            popup.setY(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxY() - scene.getHeight() - 50);
+
+            popup.show();
+
+            // Auto-cerrar después de 30 segundos
+            new Thread(() -> {
+                try {
+                    Thread.sleep(30000);
+                    javafx.application.Platform.runLater(() -> {
+                        if (popup.isShowing()) {
+                            popup.close();
+                        }
+                    });
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+
+        } catch (SQLException e) {
+            System.err.println("Error al cargar eventos del día: " + e.getMessage());
+        }
 
 
 
 
+    }
+    // ==================== CLASE AUXILIAR PARA RECORDATORIOS ====================
+    private static class RecordatorioOpcion {
+        private final Integer minutos;
+        private final String descripcion;
+
+        public RecordatorioOpcion(Integer minutos, String descripcion) {
+            this.minutos = minutos;
+            this.descripcion = descripcion;
+        }
+
+        public Integer getMinutos() {
+            return minutos;
+        }
+
+        public String getDescripcion() {
+            return descripcion;
+        }
+
+        @Override
+        public String toString() {
+            return descripcion;
+        }
+    }
+
+// ==================== SISTEMA DE PERMISOS ====================
+
+    private boolean esAdmin() {
+        return usuarioActual.getRol() == RolUsuario.ADMIN;
+    }
+
+    private boolean esAbogado() {
+        return usuarioActual.getRol() == RolUsuario.ABOGADO;
+    }
+
+    private boolean esSecretario() {
+        return usuarioActual.getRol() == RolUsuario.SECRETARIA;
+    }
+
+    private boolean puedeEliminar() {
+        // Solo Admin y Abogado pueden eliminar
+        return esAdmin() || esAbogado();
+    }
+
+    private boolean puedeEditarUsuarios() {
+        // Solo Admin puede gestionar usuarios
+        return esAdmin();
+    }
+
+    private boolean puedeEditarEconomia() {
+        // Admin y Abogado pueden editar economía
+        return esAdmin() || esAbogado();
+    }
 
 }
 

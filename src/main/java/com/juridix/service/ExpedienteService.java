@@ -1,11 +1,16 @@
 package com.juridix.service;
 
+import com.juridix.db.Database;
 import com.juridix.db.ExpedienteDAO;
 import com.juridix.model.Expediente;
 import com.juridix.model.EstadoExpediente;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -151,13 +156,14 @@ public class ExpedienteService {
      * @param numero Número (puede ser null)
      * @param cliente Cliente (puede ser null)
      * @param estado Estado (puede ser null)
-     * @param fuero Fuero (puede ser null)
+     * //@param fuero Fuero (puede ser null)
      * @return Lista de expedientes que coinciden
      * @throws SQLException Si hay un error de base de datos
      */
+
     public List<Expediente> buscarPorCriterios(String numero, String cliente,
-                                               EstadoExpediente estado, String fuero) throws SQLException {
-        return expedienteDAO.buscarPorCriterios(numero, cliente, estado, fuero);
+                                               EstadoExpediente estado) throws SQLException {
+        return expedienteDAO.buscarPorCriterios(numero, cliente, estado);
     }
 
     // ==================== UPDATE ====================

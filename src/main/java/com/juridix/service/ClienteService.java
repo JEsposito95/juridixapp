@@ -1,7 +1,10 @@
 package com.juridix.service;
 
 import com.juridix.db.ClienteDAO;
+import com.juridix.db.DocumentoClienteDAO;
+import com.juridix.db.ExpedienteDAO;
 import com.juridix.model.Cliente;
+import com.juridix.model.Expediente;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -86,8 +89,8 @@ public class ClienteService {
 
         // Verificar DNI duplicado (excepto el mismo cliente)
         if (cliente.getDni() != null && !cliente.getDni().trim().isEmpty()) {
-            Optional<Cliente> otroCLiente = clienteDAO.buscarPorDni(cliente.getDni());
-            if (otroCLiente.isPresent() && !otroCLiente.get().getId().equals(cliente.getId())) {
+            Optional<Cliente> otroCliente = clienteDAO.buscarPorDni(cliente.getDni());
+            if (otroCliente.isPresent() && !otroCliente.get().getId().equals(cliente.getId())) {
                 throw new IllegalArgumentException("Ya existe otro cliente con el DNI: " + cliente.getDni());
             }
         }
@@ -133,9 +136,31 @@ public class ClienteService {
             throw new IllegalArgumentException("No existe un cliente con el ID: " + id);
         }
 
-        // Aquí podrías verificar si tiene expedientes asociados antes de eliminar
-        // Por ahora lo dejamos simple
+        // ========== VALIDAR EXPEDIENTES ASOCIADOS ==========
+        ExpedienteDAO expedienteDAO = new ExpedienteDAO();
+        List<Expediente> expedientesAsociados = expedienteDAO.listarPorClienteId(id);
 
+        if (!expedientesAsociados.isEmpty()) {
+            throw new IllegalStateException(
+                    "No se puede eliminar el cliente porque tiene " +
+                            expedientesAsociados.size() +
+                            " expediente(s) asociado(s). Primero debe eliminar o reasignar los expedientes."
+            );
+        }
+
+        // ========== VALIDAR DOCUMENTOS ASOCIADOS ==========
+        DocumentoClienteDAO documentoDAO = new DocumentoClienteDAO();
+        int cantidadDocumentos = documentoDAO.contarPorCliente(id);
+
+        if (cantidadDocumentos > 0) {
+            throw new IllegalStateException(
+                    "No se puede eliminar el cliente porque tiene " +
+                            cantidadDocumentos +
+                            " documento(s) asociado(s). Primero debe eliminar los documentos."
+            );
+        }
+
+        // Si pasó todas las validaciones, eliminar
         clienteDAO.eliminar(id);
     }
 
@@ -205,9 +230,17 @@ public class ClienteService {
             this.inactivos = inactivos;
         }
 
-        public int getTotal() { return total; }
-        public int getActivos() { return activos; }
-        public int getInactivos() { return inactivos; }
+        public int getTotal() {
+            return total;
+        }
+
+        public int getActivos() {
+            return activos;
+        }
+
+        public int getInactivos() {
+            return inactivos;
+        }
 
         @Override
         public String toString() {
