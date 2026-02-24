@@ -22,6 +22,7 @@ public class Expediente {
     private Integer creadorId;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaModificacion;
+    private String actor;
 
     // Formateadores para conversión de fechas
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -169,6 +170,14 @@ public class Expediente {
 
     public void setFechaModificacion(LocalDateTime fechaModificacion) {
         this.fechaModificacion = fechaModificacion;
+    }
+
+    public String getActor() {
+        return actor;
+    }
+
+    public void setActor(String actor) {
+        this.actor = actor;
     }
 
     // Métodos de utilidad para conversión de fechas

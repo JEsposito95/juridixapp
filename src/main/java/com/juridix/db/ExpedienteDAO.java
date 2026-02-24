@@ -21,12 +21,12 @@ public class ExpedienteDAO {
      */
     public Expediente guardar(Expediente expediente) throws SQLException {
         String sql = """
-            INSERT INTO expedientes (
-                numero, caratula, cliente, demandado, fuero, juzgado, 
-                secretaria, estado, fecha_inicio, fecha_finalizacion, 
-                monto_estimado, observaciones, creador_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """;
+        INSERT INTO expedientes (
+            numero, caratula, cliente, cliente_id, actor, demandado, fuero, juzgado, 
+            secretaria, estado, fecha_inicio, fecha_finalizacion, 
+            monto_estimado, observaciones, creador_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -34,22 +34,30 @@ public class ExpedienteDAO {
             ps.setString(1, expediente.getNumero());
             ps.setString(2, expediente.getCaratula());
             ps.setString(3, expediente.getCliente());
-            ps.setString(4, expediente.getDemandado());
-            ps.setString(5, expediente.getFuero());
-            ps.setString(6, expediente.getJuzgado());
-            ps.setString(7, expediente.getSecretaria());
-            ps.setString(8, expediente.getEstado().name());
-            ps.setString(9, expediente.getFechaInicioAsString());
-            ps.setString(10, expediente.getFechaFinalizacionAsString());
+
+            // ✅ AGREGAR cliente_id
+            if (expediente.getClienteId() != null) {
+                ps.setInt(4, expediente.getClienteId());
+            } else {
+                ps.setNull(4, Types.INTEGER);
+            }
+            ps.setString(5, expediente.getActor());
+            ps.setString(6, expediente.getDemandado());
+            ps.setString(7, expediente.getFuero());
+            ps.setString(8, expediente.getJuzgado());
+            ps.setString(9, expediente.getSecretaria());
+            ps.setString(10, expediente.getEstado().name());
+            ps.setString(11, expediente.getFechaInicioAsString());
+            ps.setString(12, expediente.getFechaFinalizacionAsString());
 
             if (expediente.getMontoEstimado() != null) {
-                ps.setDouble(11, expediente.getMontoEstimado());
+                ps.setDouble(13, expediente.getMontoEstimado());
             } else {
-                ps.setNull(11, Types.DOUBLE);
+                ps.setNull(13, Types.DOUBLE);
             }
 
-            ps.setString(12, expediente.getObservaciones());
-            ps.setInt(13, expediente.getCreadorId());
+            ps.setString(14, expediente.getObservaciones());
+            ps.setInt(15, expediente.getCreadorId());
 
             int affectedRows = ps.executeUpdate();
 
@@ -57,7 +65,6 @@ public class ExpedienteDAO {
                 throw new SQLException("No se pudo guardar el expediente");
             }
 
-            // Obtener el ID generado
             try (ResultSet generatedKeys = ps.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     expediente.setId(generatedKeys.getInt(1));
@@ -73,7 +80,6 @@ public class ExpedienteDAO {
             throw e;
         }
     }
-
     // ==================== READ ====================
 
     /**
@@ -331,25 +337,33 @@ public class ExpedienteDAO {
     /**
      * Busca expedientes por múltiples criterios
      *
-     * @param numero  Número (puede ser null)
-     * @param cliente Cliente (puede ser null)
+     * @param textoBusqueda  Número (puede ser null)
+     * @param clienteNombre Cliente (puede ser null)
      * @param estado  Estado (puede ser null)
      * @return Lista de expedientes que coinciden
      * @throws SQLException Si ocurre un error en la base de datos
      */
-    public List<Expediente> buscarPorCriterios(String numero, String cliente,
+    public List<Expediente> buscarPorCriterios(String textoBusqueda, String clienteNombre,
                                                EstadoExpediente estado) throws SQLException {
-        StringBuilder sql = new StringBuilder("SELECT * FROM expedientes WHERE 1=1");
+        StringBuilder sql = new StringBuilder(
+                "SELECT * FROM expedientes WHERE 1=1"
+        );
+
         List<Object> parametros = new ArrayList<>();
 
-        if (numero != null && !numero.trim().isEmpty()) {
-            sql.append(" AND numero LIKE ?");
-            parametros.add("%" + numero.trim() + "%");
+        // ✅ CAMBIO IMPORTANTE: Buscar en número O cliente (con OR, no AND)
+        if (textoBusqueda != null && !textoBusqueda.trim().isEmpty()) {
+            sql.append(" AND (numero LIKE ? OR cliente LIKE ? OR caratula LIKE ?)");
+            parametros.add("%" + textoBusqueda.trim() + "%");
+            parametros.add("%" + textoBusqueda.trim() + "%");
+            parametros.add("%" + textoBusqueda.trim() + "%");
         }
 
-        if (cliente != null && !cliente.trim().isEmpty()) {
+        // Si viene un nombre de cliente específico adicional
+        if (clienteNombre != null && !clienteNombre.trim().isEmpty() &&
+                (textoBusqueda == null || !textoBusqueda.equals(clienteNombre))) {
             sql.append(" AND cliente LIKE ?");
-            parametros.add("%" + cliente.trim() + "%");
+            parametros.add("%" + clienteNombre.trim() + "%");
         }
 
         if (estado != null) {
@@ -357,7 +371,7 @@ public class ExpedienteDAO {
             parametros.add(estado.name());
         }
 
-        sql.append(" ORDER BY fecha_creacion DESC");
+        sql.append(" ORDER BY fecha_inicio DESC");
 
         // ========== DEBUG ==========
         System.out.println("🔍 SQL GENERADO: " + sql.toString());
@@ -382,10 +396,7 @@ public class ExpedienteDAO {
                 }
             }
 
-            // ========== DEBUG ==========
             System.out.println("📊 Expedientes mapeados: " + expedientes.size());
-            // ========== FIN DEBUG ==========
-
             return expedientes;
 
         } catch (SQLException e) {
@@ -408,6 +419,8 @@ public class ExpedienteDAO {
                 numero = ?,
                 caratula = ?,
                 cliente = ?,
+                cliente_id = ?,
+                actor = ?,
                 demandado = ?,
                 fuero = ?,
                 juzgado = ?,
@@ -427,22 +440,28 @@ public class ExpedienteDAO {
             ps.setString(1, expediente.getNumero());
             ps.setString(2, expediente.getCaratula());
             ps.setString(3, expediente.getCliente());
-            ps.setString(4, expediente.getDemandado());
-            ps.setString(5, expediente.getFuero());
-            ps.setString(6, expediente.getJuzgado());
-            ps.setString(7, expediente.getSecretaria());
-            ps.setString(8, expediente.getEstado().name());
-            ps.setString(9, expediente.getFechaInicioAsString());
-            ps.setString(10, expediente.getFechaFinalizacionAsString());
+            if (expediente.getClienteId() != null) {
+                ps.setInt(4, expediente.getClienteId());
+            } else {
+                ps.setNull(4, Types.INTEGER);
+            }
+            ps.setString(5, expediente.getActor());
+            ps.setString(6, expediente.getDemandado());
+            ps.setString(7, expediente.getFuero());
+            ps.setString(8, expediente.getJuzgado());
+            ps.setString(9, expediente.getSecretaria());
+            ps.setString(10, expediente.getEstado().name());
+            ps.setString(11, expediente.getFechaInicioAsString());
+            ps.setString(12, expediente.getFechaFinalizacionAsString());
 
             if (expediente.getMontoEstimado() != null) {
-                ps.setDouble(11, expediente.getMontoEstimado());
+                ps.setDouble(13, expediente.getMontoEstimado());
             } else {
-                ps.setNull(11, Types.DOUBLE);
+                ps.setNull(13, Types.DOUBLE);
             }
 
-            ps.setString(12, expediente.getObservaciones());
-            ps.setInt(13, expediente.getId());
+            ps.setString(14, expediente.getObservaciones());
+            ps.setInt(15, expediente.getId());
 
             int affectedRows = ps.executeUpdate();
 
@@ -589,6 +608,7 @@ public class ExpedienteDAO {
         expediente.setNumero(rs.getString("numero"));
         expediente.setCaratula(rs.getString("caratula"));
         expediente.setCliente(rs.getString("cliente"));
+        expediente.setActor(rs.getString("actor"));
         expediente.setDemandado(rs.getString("demandado"));
         expediente.setFuero(rs.getString("fuero"));
         expediente.setJuzgado(rs.getString("juzgado"));

@@ -11,6 +11,13 @@ public class MainApp extends Application {
     @Override
     public void start(Stage primaryStage) {
         try {
+            // Mostrar información de rutas
+            System.out.println("=".repeat(60));
+            System.out.println("📂 UBICACIÓN DE ARCHIVOS:");
+            System.out.println("   Base de datos: " + Database.getDatabasePath());
+            System.out.println("   Documentos: " + Database.getAppDirectory() + "/documentos");
+            System.out.println("=".repeat(60));
+
             // Inicializar base de datos
             DatabaseInitializer.init();
 

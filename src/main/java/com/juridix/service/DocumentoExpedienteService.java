@@ -1,9 +1,8 @@
 package com.juridix.service;
 
 import com.juridix.db.Database;
-import com.juridix.db.DocumentoClienteDAO;
-import com.juridix.model.DocumentoCliente;
-import com.juridix.model.TipoDocumentoCliente;
+import com.juridix.db.DocumentoExpedienteDAO;
+import com.juridix.model.DocumentoExpediente;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,28 +17,28 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public class DocumentoClienteService {
+public class DocumentoExpedienteService {
 
-    private final DocumentoClienteDAO documentoDAO;
-    private static final String DIRECTORIO_BASE = Database.getAppDirectory() + File.separator + "documentos" + File.separator + "clientes";
+    private final DocumentoExpedienteDAO documentoDAO;
+    private static final String DIRECTORIO_BASE = Database.getAppDirectory() + File.separator + "documentos" + File.separator + "expedientes";
 
-    public DocumentoClienteService() {
-        this.documentoDAO = new DocumentoClienteDAO();
+    public DocumentoExpedienteService() {
+        this.documentoDAO = new DocumentoExpedienteDAO();
         crearDirectorioBase();
     }
 
-    public DocumentoClienteService(DocumentoClienteDAO documentoDAO) {
+    public DocumentoExpedienteService(DocumentoExpedienteDAO documentoDAO) {
         this.documentoDAO = documentoDAO;
         crearDirectorioBase();
     }
 
     // ==================== CREATE ====================
 
-    public DocumentoCliente subirDocumento(Integer clienteId, File archivo, TipoDocumentoCliente tipo,
-                                           String descripcion, Integer usuarioId) throws SQLException, IOException {
+    public DocumentoExpediente subirDocumento(Integer expedienteId, File archivo, String tipoDocumento,
+                                              String descripcion, Integer usuarioId) throws SQLException, IOException {
 
-        if (clienteId == null || clienteId <= 0) {
-            throw new IllegalArgumentException("El ID del cliente debe ser válido");
+        if (expedienteId == null || expedienteId <= 0) {
+            throw new IllegalArgumentException("El ID del expediente debe ser válido");
         }
 
         if (archivo == null || !archivo.exists()) {
@@ -50,31 +49,31 @@ public class DocumentoClienteService {
             throw new IllegalArgumentException("Debe ser un archivo válido");
         }
 
-        // Validar tamaño (máximo 10MB)
+        // Validar tamaño (máximo 50MB para documentos)
         long tamanioMB = archivo.length() / (1024 * 1024);
-        if (tamanioMB > 10) {
-            throw new IllegalArgumentException("El archivo no puede superar los 10MB");
+        if (tamanioMB > 50) {
+            throw new IllegalArgumentException("El archivo no puede superar los 50MB");
         }
 
-        // Crear directorio del cliente
-        Path directorioCliente = Paths.get(DIRECTORIO_BASE, clienteId.toString());
-        Files.createDirectories(directorioCliente);
+        // Crear directorio del expediente
+        Path directorioExpediente = Paths.get(DIRECTORIO_BASE, expedienteId.toString());
+        Files.createDirectories(directorioExpediente);
 
         // Generar nombre único para el archivo
         String extension = obtenerExtension(archivo.getName());
         String nombreUnico = generarNombreUnico(extension);
-        Path rutaDestino = directorioCliente.resolve(nombreUnico);
+        Path rutaDestino = directorioExpediente.resolve(nombreUnico);
 
         // Copiar archivo
         Files.copy(archivo.toPath(), rutaDestino, StandardCopyOption.REPLACE_EXISTING);
 
         // Crear registro en BD
-        DocumentoCliente documento = new DocumentoCliente();
-        documento.setClienteId(clienteId);
+        DocumentoExpediente documento = new DocumentoExpediente();
+        documento.setExpedienteId(expedienteId);
         documento.setNombreArchivo(nombreUnico);
         documento.setNombreOriginal(archivo.getName());
         documento.setRutaArchivo(rutaDestino.toString());
-        documento.setTipoDocumento(tipo);
+        documento.setTipoDocumento(tipoDocumento);
         documento.setDescripcion(descripcion);
         documento.setTamanioBytes(archivo.length());
         documento.setExtension(extension);
@@ -85,38 +84,38 @@ public class DocumentoClienteService {
 
     // ==================== READ ====================
 
-    public Optional<DocumentoCliente> buscarPorId(Integer id) throws SQLException {
+    public Optional<DocumentoExpediente> buscarPorId(Integer id) throws SQLException {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("El ID debe ser un número positivo");
         }
         return documentoDAO.buscarPorId(id);
     }
 
-    public List<DocumentoCliente> listarPorCliente(Integer clienteId) throws SQLException {
-        if (clienteId == null || clienteId <= 0) {
-            throw new IllegalArgumentException("El ID del cliente debe ser válido");
+    public List<DocumentoExpediente> listarPorExpediente(Integer expedienteId) throws SQLException {
+        if (expedienteId == null || expedienteId <= 0) {
+            throw new IllegalArgumentException("El ID del expediente debe ser válido");
         }
-        return documentoDAO.listarPorCliente(clienteId);
+        return documentoDAO.listarPorExpediente(expedienteId);
     }
 
-    public List<DocumentoCliente> buscarPorTipo(Integer clienteId, TipoDocumentoCliente tipo) throws SQLException {
-        if (clienteId == null || clienteId <= 0) {
-            throw new IllegalArgumentException("El ID del cliente debe ser válido");
+    public List<DocumentoExpediente> buscarPorTipo(Integer expedienteId, String tipo) throws SQLException {
+        if (expedienteId == null || expedienteId <= 0) {
+            throw new IllegalArgumentException("El ID del expediente debe ser válido");
         }
         if (tipo == null) {
             throw new IllegalArgumentException("El tipo no puede ser nulo");
         }
-        return documentoDAO.buscarPorTipo(clienteId, tipo);
+        return documentoDAO.buscarPorTipo(expedienteId, tipo);
     }
 
     // ==================== UPDATE ====================
 
-    public DocumentoCliente actualizarDocumento(DocumentoCliente documento) throws SQLException {
+    public DocumentoExpediente actualizarDocumento(DocumentoExpediente documento) throws SQLException {
         if (documento == null || documento.getId() == null) {
             throw new IllegalArgumentException("El documento debe tener un ID");
         }
 
-        Optional<DocumentoCliente> existente = documentoDAO.buscarPorId(documento.getId());
+        Optional<DocumentoExpediente> existente = documentoDAO.buscarPorId(documento.getId());
         if (existente.isEmpty()) {
             throw new IllegalArgumentException("No existe el documento con ID: " + documento.getId());
         }
@@ -131,7 +130,7 @@ public class DocumentoClienteService {
             throw new IllegalArgumentException("El ID debe ser un número positivo");
         }
 
-        Optional<DocumentoCliente> documento = documentoDAO.buscarPorId(id);
+        Optional<DocumentoExpediente> documento = documentoDAO.buscarPorId(id);
         if (documento.isEmpty()) {
             throw new IllegalArgumentException("No existe el documento con ID: " + id);
         }
@@ -149,7 +148,7 @@ public class DocumentoClienteService {
     // ==================== OPERACIONES DE ARCHIVO ====================
 
     public File obtenerArchivo(Integer documentoId) throws SQLException, IOException {
-        Optional<DocumentoCliente> documento = documentoDAO.buscarPorId(documentoId);
+        Optional<DocumentoExpediente> documento = documentoDAO.buscarPorId(documentoId);
         if (documento.isEmpty()) {
             throw new IllegalArgumentException("No existe el documento");
         }
@@ -178,11 +177,11 @@ public class DocumentoClienteService {
 
     // ==================== ESTADÍSTICAS ====================
 
-    public int contarPorCliente(Integer clienteId) throws SQLException {
-        if (clienteId == null || clienteId <= 0) {
-            throw new IllegalArgumentException("El ID del cliente debe ser válido");
+    public int contarPorExpediente(Integer expedienteId) throws SQLException {
+        if (expedienteId == null || expedienteId <= 0) {
+            throw new IllegalArgumentException("El ID del expediente debe ser válido");
         }
-        return documentoDAO.contarPorCliente(clienteId);
+        return documentoDAO.contarPorExpediente(expedienteId);
     }
 
     // ==================== UTILIDADES ====================
@@ -192,7 +191,7 @@ public class DocumentoClienteService {
             Path path = Paths.get(DIRECTORIO_BASE);
             if (!Files.exists(path)) {
                 Files.createDirectories(path);
-                System.out.println("✅ Directorio de documentos creado: " + path.toAbsolutePath());
+                System.out.println("✅ Directorio de documentos de expedientes creado: " + path.toAbsolutePath());
             }
         } catch (IOException e) {
             System.err.println("❌ Error al crear directorio base: " + e.getMessage());
@@ -216,7 +215,7 @@ public class DocumentoClienteService {
     public boolean esExtensionPermitida(String extension) {
         String[] extensionesPermitidas = {
                 "pdf", "doc", "docx", "jpg", "jpeg", "png", "gif",
-                "txt", "xls", "xlsx", "zip", "rar"
+                "txt", "xls", "xlsx", "zip", "rar", "odt", "rtf"
         };
 
         for (String ext : extensionesPermitidas) {

@@ -1,11 +1,31 @@
 package com.juridix.db;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class Database {
-    private static final String URL = "jdbc:sqlite:juridix.db";
+    // ✅ Ruta en carpeta del usuario
+    private static final String APP_DIR = System.getProperty("user.home") + File.separator + "Juridix";
+    private static final String DB_FILE = "juridix.db";
+    private static final String URL = "jdbc:sqlite:" + APP_DIR + File.separator + DB_FILE;
+
+    static {
+        // Crear directorio si no existe
+        try {
+            Path appPath = Paths.get(APP_DIR);
+            if (!Files.exists(appPath)) {
+                Files.createDirectories(appPath);
+                System.out.println("✅ Directorio de aplicación creado: " + appPath.toAbsolutePath());
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error al crear directorio de aplicación: " + e.getMessage());
+        }
+    }
 
     private Database() {
         // Constructor privado
@@ -13,21 +33,13 @@ public class Database {
 
     /**
      * Obtiene una nueva conexión a la base de datos
-     * IMPORTANTE: Cada llamada retorna una NUEVA conexión que debe cerrarse después de usarse
      */
     public static Connection getConnection() throws SQLException {
         try {
-            // Cargar el driver
             Class.forName("org.sqlite.JDBC");
-
-            // Crear nueva conexión
             Connection conn = DriverManager.getConnection(URL);
-
-            // Configurar para SQLite
-            conn.setAutoCommit(true); // MUY IMPORTANTE
-
+            conn.setAutoCommit(true);
             return conn;
-
         } catch (ClassNotFoundException e) {
             throw new SQLException("Driver SQLite no encontrado", e);
         }
@@ -43,5 +55,19 @@ public class Database {
             System.err.println("❌ Error al probar conexión: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Obtiene la ruta del directorio de la aplicación
+     */
+    public static String getAppDirectory() {
+        return APP_DIR;
+    }
+
+    /**
+     * Obtiene la ruta completa de la base de datos
+     */
+    public static String getDatabasePath() {
+        return APP_DIR + File.separator + DB_FILE;
     }
 }

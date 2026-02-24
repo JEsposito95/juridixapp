@@ -275,6 +275,12 @@ public class DatabaseInitializer {
 
             if (inserted > 0) {
                 System.out.println("✅ Usuario admin creado");
+                System.out.println("=".repeat(60));
+                System.out.println("🔑 CREDENCIALES DE ACCESO INICIAL:");
+                System.out.println("   Usuario: admin");
+                System.out.println("   Contraseña: admin123");
+                System.out.println("   ⚠️  IMPORTANTE: Cambiar la contraseña después del primer login");
+                System.out.println("=".repeat(60));
             } else {
                 System.out.println("ℹ️ Usuario admin ya existe");
             }
