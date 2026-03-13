@@ -48,3 +48,7 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+
+Juridix/runtime/
+runtime/
