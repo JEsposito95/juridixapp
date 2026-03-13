@@ -1219,7 +1219,7 @@ public class MainController {
         if (expedienteSeleccionado.getMontoEstimado() != null) {
             Label lblMon = new Label("Monto Estimado:");
             lblMon.setStyle(labelStyle);
-            Label valMon = new Label(String.format("$%.2f", expedienteSeleccionado.getMontoEstimado()));
+            Label valMon = new Label(formatearMoneda(expedienteSeleccionado.getMontoEstimado()));
             valMon.setStyle(valueStyle);
             grid.add(lblMon, 0, row);
             grid.add(valMon, 1, row++);
@@ -1565,20 +1565,20 @@ public class MainController {
 
             // Cuotas Acordadas
             gridResumen.add(new Label("Plan de Cuotas (Acordado):"), 0, row);
-            Label lblCuotas = new Label(String.format("$%.2f", totalCuotasAcordado));
+            Label lblCuotas = new Label(formatearMoneda(totalCuotasAcordado));
             lblCuotas.setStyle("-fx-font-weight: bold; -fx-text-fill: #8e44ad;");
             gridResumen.add(lblCuotas, 1, row++);
 
             // Cuotas Pagadas
             gridResumen.add(new Label("Cuotas Pagadas:"), 0, row);
-            Label lblCuotasPag = new Label(String.format("$%.2f", totalCuotasPagado));
+            Label lblCuotasPag = new Label(formatearMoneda(totalCuotasPagado));
             lblCuotasPag.setStyle("-fx-font-weight: bold; -fx-text-fill: #27ae60;");
             gridResumen.add(lblCuotasPag, 1, row++);
 
             // Honorarios Adicionales
             if (totalHonorarios > 0) {
                 gridResumen.add(new Label("Honorarios Adicionales:"), 0, row);
-                Label lblHon = new Label(String.format("$%.2f", totalHonorarios));
+                Label lblHon = new Label(formatearMoneda(totalHonorarios));
                 lblHon.setStyle("-fx-font-weight: bold; -fx-text-fill: #2980b9;");
                 gridResumen.add(lblHon, 1, row++);
             }
@@ -1586,14 +1586,14 @@ public class MainController {
             // Otros Pagos
             if (totalOtrosPagos > 0) {
                 gridResumen.add(new Label("Otros Pagos:"), 0, row);
-                Label lblOtros = new Label(String.format("$%.2f", totalOtrosPagos));
+                Label lblOtros = new Label(formatearMoneda(totalOtrosPagos));
                 lblOtros.setStyle("-fx-font-weight: bold; -fx-text-fill: #16a085;");
                 gridResumen.add(lblOtros, 1, row++);
             }
 
             // Gastos del Trámite
             gridResumen.add(new Label("Gastos del Trámite:"), 0, row);
-            Label lblGast = new Label(String.format("$%.2f", totalGastos));
+            Label lblGast = new Label(formatearMoneda(totalGastos));
             lblGast.setStyle("-fx-font-weight: bold; -fx-text-fill: #e67e22;");
             gridResumen.add(lblGast, 1, row++);
 
@@ -1602,13 +1602,13 @@ public class MainController {
 
             // Total Pagos Recibidos
             gridResumen.add(new Label("Total Pagos Recibidos:"), 0, row);
-            Label lblTotalPagos = new Label(String.format("$%.2f", totalPagosRecibidos));
+            Label lblTotalPagos = new Label(formatearMoneda(totalPagosRecibidos));
             lblTotalPagos.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #27ae60;");
             gridResumen.add(lblTotalPagos, 1, row++);
 
             // Pendiente de Cobro
             gridResumen.add(new Label("Pendiente de Cobro:"), 0, row);
-            Label lblPend = new Label(String.format("$%.2f", pendienteCobro));
+            Label lblPend = new Label(formatearMoneda(pendienteCobro));
             lblPend.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " +
                     (pendienteCobro > 0 ? "#e74c3c" : "#27ae60") + ";");
             gridResumen.add(lblPend, 1, row++);
@@ -1625,8 +1625,17 @@ public class MainController {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(10));
 
-        Button btnNueva = new Button("➕ Nueva Cuota / Plan de Pago");
-        btnNueva.getStyleClass().addAll("button", "button-success");
+        // Dos botones separados
+        HBox botonesHeader = new HBox(10);
+        botonesHeader.setAlignment(Pos.CENTER_LEFT);
+
+        Button btnNuevoPlan = new Button("📋 Nuevo Plan de Cuotas");
+        btnNuevoPlan.getStyleClass().addAll("button", "button-success");
+
+        Button btnRegistrarCuota = new Button("💵 Registrar Cuota Individual");
+        btnRegistrarCuota.getStyleClass().addAll("button", "button-info");
+
+        botonesHeader.getChildren().addAll(btnNuevoPlan, btnRegistrarCuota);
 
         // Tabla de cuotas
         TableView<Cuota> tabla = new TableView<>();
@@ -1647,7 +1656,7 @@ public class MainController {
 
         TableColumn<Cuota, String> colPendiente = new TableColumn<>("Pendiente");
         colPendiente.setCellValueFactory(cellData ->
-                new SimpleStringProperty(String.format("$%.2f", cellData.getValue().getSaldoPendiente())));
+                new SimpleStringProperty(formatearMoneda(cellData.getValue().getSaldoPendiente())));
         colPendiente.setPrefWidth(120);
 
         TableColumn<Cuota, String> colProgreso = new TableColumn<>("Progreso");
@@ -1669,9 +1678,21 @@ public class MainController {
             mostrarError("Error: " + e.getMessage());
         }
 
-        // Evento botón nueva cuota
-        btnNueva.setOnAction(e -> {
-            abrirFormularioNuevaCuota();
+        // Evento botón nuevo plan de cuotas
+        btnNuevoPlan.setOnAction(e -> {
+            abrirFormularioNuevoPlanCuotas();
+            try {
+                List<Cuota> cuotas = cuotaService.listarCuotasPorExpediente(expedienteSeleccionado.getId());
+                lista.clear();
+                lista.addAll(cuotas);
+            } catch (SQLException ex) {
+                mostrarError("Error: " + ex.getMessage());
+            }
+        });
+
+        // Evento botón registrar cuota individual
+        btnRegistrarCuota.setOnAction(e -> {
+            abrirFormularioCuotaIndividual();
             try {
                 List<Cuota> cuotas = cuotaService.listarCuotasPorExpediente(expedienteSeleccionado.getId());
                 lista.clear();
@@ -1722,11 +1743,200 @@ public class MainController {
 
         botones.getChildren().addAll(btnVerPagos, btnEliminar);
 
-        panel.getChildren().addAll(btnNueva, tabla, botones);
+        panel.getChildren().addAll(botonesHeader, tabla, botones);
         VBox.setVgrow(tabla, Priority.ALWAYS);
 
         return panel;
     }
+
+    private void abrirFormularioNuevoPlanCuotas() {
+        Stage ventana = new Stage();
+        ventana.initModality(Modality.APPLICATION_MODAL);
+        ventana.setTitle("Nuevo Plan de Cuotas");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        int row = 0;
+
+        grid.add(new Label("Fecha de Acuerdo *:"), 0, row);
+        DatePicker dpFecha = new DatePicker(LocalDate.now());
+        grid.add(dpFecha, 1, row++);
+
+        grid.add(new Label("Monto Total Acordado *:"), 0, row);
+        TextField txtTotal = new TextField();
+        txtTotal.setPromptText("Ej: 50000");
+        grid.add(txtTotal, 1, row++);
+
+        grid.add(new Label("Cantidad de Cuotas:"), 0, row);
+        TextField txtCantidad = new TextField();
+        txtCantidad.setPromptText("Ej: 10");
+        grid.add(txtCantidad, 1, row++);
+
+        grid.add(new Label("Monto por Cuota:"), 0, row);
+        TextField txtMontoCuota = new TextField();
+        txtMontoCuota.setPromptText("Ej: 5000");
+        grid.add(txtMontoCuota, 1, row++);
+
+        Label lblInfo = new Label("ℹ️ Plan de pagos con cuotas. Los pagos pueden variar en monto.");
+        lblInfo.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
+        lblInfo.setWrapText(true);
+        lblInfo.setMaxWidth(350);
+        grid.add(lblInfo, 0, row++, 2, 1);
+
+        grid.add(new Label("Observaciones:"), 0, row);
+        TextArea txtObs = new TextArea();
+        txtObs.setPrefRowCount(3);
+        txtObs.setPromptText("Condiciones del acuerdo...");
+        grid.add(txtObs, 1, row++);
+
+        HBox botones = new HBox(10);
+        botones.setAlignment(Pos.CENTER);
+        botones.setPadding(new Insets(15, 0, 0, 0));
+
+        Button btnGuardar = new Button("💾 Guardar");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
+        btnGuardar.setOnAction(e -> {
+            try {
+                if (txtTotal.getText().trim().isEmpty()) {
+                    mostrarAdvertencia("El monto total es obligatorio");
+                    return;
+                }
+
+                Cuota cuota = new Cuota();
+                cuota.setExpedienteId(expedienteSeleccionado.getId());
+                cuota.setFechaAcuerdo(dpFecha.getValue());
+                cuota.setMontoTotalAcordado(Double.parseDouble(txtTotal.getText().trim()));
+
+                if (!txtCantidad.getText().trim().isEmpty()) {
+                    cuota.setCantidadCuotasPlanificadas(Integer.parseInt(txtCantidad.getText().trim()));
+                }
+
+                if (!txtMontoCuota.getText().trim().isEmpty()) {
+                    cuota.setMontoPorCuota(Double.parseDouble(txtMontoCuota.getText().trim()));
+                }
+
+                cuota.setObservaciones(txtObs.getText().trim());
+                cuota.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+
+                cuotaService.crearCuota(cuota);
+                mostrarInfo("Plan de cuotas creado correctamente");
+                ventana.close();
+
+            } catch (NumberFormatException ex) {
+                mostrarError("Los montos deben ser números válidos");
+            } catch (Exception ex) {
+                mostrarError("Error: " + ex.getMessage());
+            }
+        });
+
+        Button btnCancelar = new Button("❌ Cancelar");
+        btnCancelar.setOnAction(e -> ventana.close());
+
+        botones.getChildren().addAll(btnGuardar, btnCancelar);
+
+        VBox root = new VBox(15);
+        root.getChildren().addAll(
+                new Label("Crear Plan de Cuotas"),
+                new Separator(),
+                grid,
+                botones
+        );
+        root.setPadding(new Insets(20));
+
+        Scene scene = new Scene(root);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
+        ventana.setScene(scene);
+        ventana.showAndWait();
+    }
+
+    private void abrirFormularioCuotaIndividual() {
+        Stage ventana = new Stage();
+        ventana.initModality(Modality.APPLICATION_MODAL);
+        ventana.setTitle("Registrar Cuota Individual");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        int row = 0;
+
+        grid.add(new Label("Fecha *:"), 0, row);
+        DatePicker dpFecha = new DatePicker(LocalDate.now());
+        grid.add(dpFecha, 1, row++);
+
+        grid.add(new Label("Monto *:"), 0, row);
+        TextField txtMonto = new TextField();
+        txtMonto.setPromptText("Ej: 10000");
+        grid.add(txtMonto, 1, row++);
+
+        Label lblInfo = new Label("ℹ️ Registro de una única cuota sin plan de pagos");
+        lblInfo.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
+        lblInfo.setWrapText(true);
+        lblInfo.setMaxWidth(350);
+        grid.add(lblInfo, 0, row++, 2, 1);
+
+        grid.add(new Label("Observaciones:"), 0, row);
+        TextArea txtObs = new TextArea();
+        txtObs.setPrefRowCount(2);
+        grid.add(txtObs, 1, row++);
+
+        HBox botones = new HBox(10);
+        botones.setAlignment(Pos.CENTER);
+        botones.setPadding(new Insets(15, 0, 0, 0));
+
+        Button btnGuardar = new Button("💾 Guardar");
+        btnGuardar.getStyleClass().addAll("button", "button-success");
+        btnGuardar.setOnAction(e -> {
+            try {
+                if (txtMonto.getText().trim().isEmpty()) {
+                    mostrarAdvertencia("El monto es obligatorio");
+                    return;
+                }
+
+                Cuota cuota = new Cuota();
+                cuota.setExpedienteId(expedienteSeleccionado.getId());
+                cuota.setFechaAcuerdo(dpFecha.getValue());
+                cuota.setMontoTotalAcordado(Double.parseDouble(txtMonto.getText().trim()));
+                cuota.setMontoPagado(Double.parseDouble(txtMonto.getText().trim())); // Ya pagada
+                cuota.setEstado("COMPLETADO"); // Cuota individual ya está completa
+                cuota.setObservaciones(txtObs.getText().trim());
+                cuota.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+
+                cuotaService.crearCuota(cuota);
+                mostrarInfo("Cuota registrada correctamente");
+                ventana.close();
+
+            } catch (NumberFormatException ex) {
+                mostrarError("El monto debe ser un número válido");
+            } catch (Exception ex) {
+                mostrarError("Error: " + ex.getMessage());
+            }
+        });
+
+        Button btnCancelar = new Button("❌ Cancelar");
+        btnCancelar.setOnAction(e -> ventana.close());
+
+        botones.getChildren().addAll(btnGuardar, btnCancelar);
+
+        VBox root = new VBox(15);
+        root.getChildren().addAll(
+                new Label("Registrar Cuota Individual"),
+                new Separator(),
+                grid,
+                botones
+        );
+        root.setPadding(new Insets(20));
+
+        Scene scene = new Scene(root);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
+        ventana.setScene(scene);
+        ventana.showAndWait();
+    }
+
 
     private void abrirFormularioNuevaCuota() {
         Stage ventana = new Stage();
@@ -4890,16 +5100,16 @@ public class MainController {
             double saldoPendiente = totalHonorariosPendientes - totalPagos;
 
             VBox tarjetaHonorarios = crearTarjetaFinanciera("Honorarios Pendientes",
-                    String.format("$%.2f", totalHonorariosPendientes), "#3498db");
+                    formatearMoneda(totalHonorariosPendientes), "#3498db");
 
             VBox tarjetaGastos = crearTarjetaFinanciera("Total Gastos",
-                    String.format("$%.2f", totalGastos), "#e74c3c");
+                    formatearMoneda(totalGastos), "#e74c3c");
 
             VBox tarjetaPagos = crearTarjetaFinanciera("Pagos Recibidos",
-                    String.format("$%.2f", totalPagos), "#27ae60");
+                    formatearMoneda(totalPagos), "#27ae60");
 
             VBox tarjetaSaldo = crearTarjetaFinanciera("Saldo Pendiente",
-                    String.format("$%.2f", saldoPendiente), "#f39c12");
+                    formatearMoneda(saldoPendiente), "#f39c12");
 
             resumenFinanciero.getChildren().addAll(tarjetaHonorarios, tarjetaGastos, tarjetaPagos, tarjetaSaldo);
 
@@ -5537,7 +5747,7 @@ public class MainController {
 
         TableColumn<Pago, String> colMonto = new TableColumn<>("Monto");
         colMonto.setCellValueFactory(data ->
-                new SimpleStringProperty(String.format("$%.2f", data.getValue().getMonto())));
+                new SimpleStringProperty(formatearMoneda(data.getValue().getMonto())));
         colMonto.setPrefWidth(100);
 
         TableColumn<Pago, String> colFormaPago = new TableColumn<>("Forma de Pago");
@@ -5690,7 +5900,7 @@ public class MainController {
         TableColumn<MovimientoCuenta, String> colDebe = new TableColumn<>("Debe");
         colDebe.setCellValueFactory(data -> {
             double debe = data.getValue().debe;
-            return new SimpleStringProperty(debe > 0 ? String.format("$%.2f", debe) : "-");
+            return new SimpleStringProperty(debe > 0 ? formatearMoneda(debe) : "-");
         });
         colDebe.setPrefWidth(100);
         colDebe.setStyle("-fx-alignment: CENTER-RIGHT;");
@@ -5698,14 +5908,14 @@ public class MainController {
         TableColumn<MovimientoCuenta, String> colHaber = new TableColumn<>("Haber");
         colHaber.setCellValueFactory(data -> {
             double haber = data.getValue().haber;
-            return new SimpleStringProperty(haber > 0 ? String.format("$%.2f", haber) : "-");
+            return new SimpleStringProperty(haber > 0 ? formatearMoneda(haber) : "-");
         });
         colHaber.setPrefWidth(100);
         colHaber.setStyle("-fx-alignment: CENTER-RIGHT;");
 
         TableColumn<MovimientoCuenta, String> colSaldo = new TableColumn<>("Saldo");
         colSaldo.setCellValueFactory(data ->
-                new SimpleStringProperty(String.format("$%.2f", data.getValue().saldo)));
+                new SimpleStringProperty(formatearMoneda(data.getValue().saldo)));
         colSaldo.setPrefWidth(120);
         colSaldo.setStyle("-fx-alignment: CENTER-RIGHT;");
 
@@ -5749,10 +5959,10 @@ public class MainController {
             double saldo = (totalHonorarios + totalGastos) - totalPagos;
 
             // Actualizar tarjetas
-            actualizarTarjeta(cardHonorarios, String.format("$%.2f", totalHonorarios));
-            actualizarTarjeta(cardGastos, String.format("$%.2f", totalGastos));
-            actualizarTarjeta(cardPagos, String.format("$%.2f", totalPagos));
-            actualizarTarjeta(cardSaldo, String.format("$%.2f", saldo));
+            actualizarTarjeta(cardHonorarios, formatearMoneda(totalHonorarios));
+            actualizarTarjeta(cardGastos, formatearMoneda(totalGastos));
+            actualizarTarjeta(cardPagos, formatearMoneda(totalPagos));
+            actualizarTarjeta(cardSaldo, formatearMoneda(saldo));
 
             // Crear lista de movimientos
             List<MovimientoCuenta> movimientos = new ArrayList<>();
