@@ -138,10 +138,21 @@ public class MainController {
 
     private void inicializarUI() {
         BorderPane root = new BorderPane();
-        root.setPadding(new Insets(10));
 
-        // Top: Barra superior
-        root.setTop(crearBarraSuperior());
+        // Topbar simplificada solo con título y cerrar sesión
+        HBox topbar = new HBox();
+        topbar.setStyle("-fx-background-color: #FFFFFF; -fx-border-color: rgba(0,0,0,0.06); -fx-border-width: 0 0 0.5 0; -fx-min-height: 48px; -fx-padding: 0 20 0 20;");
+        topbar.setAlignment(Pos.CENTER_LEFT);
+        Region spacerTop = new Region();
+        HBox.setHgrow(spacerTop, Priority.ALWAYS);
+        Label lblUserTop = new Label("👤 " + SesionUsuario.getUsuarioActual().getUsername());
+        lblUserTop.setStyle("-fx-font-size: 13px; -fx-text-fill: #6B6B67;");
+        Button btnCerrarTop = new Button("Cerrar sesión");
+        btnCerrarTop.setStyle("-fx-background-color: transparent; -fx-text-fill: #6B6B67; -fx-border-color: rgba(0,0,0,0.10); -fx-border-width: 0.5px; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-padding: 5 12 5 12; -fx-cursor: hand;");
+        btnCerrarTop.setOnAction(e -> cerrarSesion());
+        topbar.getChildren().addAll(spacerTop, lblUserTop, btnCerrarTop);
+        root.setTop(topbar);
+        root.setStyle("-fx-background-color: #F4F4F2;");
 
         // Center: Panel principal con pestañas
         root.setCenter(crearPanelPrincipal());
@@ -160,15 +171,16 @@ public class MainController {
         lblBadgeNotif.setVisible(false);
 
         HBox barra = new HBox(15);
-        barra.setPadding(new Insets(10));
+        barra.setPadding(new Insets(0, 20, 0, 20));
         barra.setAlignment(Pos.CENTER_LEFT);
-        //barra.setStyle("-fx-background-color: #2c3e50;");
+        barra.setMinHeight(48);
+        barra.setStyle("-fx-background-color: #0C447C;");
 
         //nuevo estilo
-        barra.getStyleClass().add("barra-superior");
+        barra.getStyleClass().add("topbar");
 
-        Label lblTitulo = new Label("JURIDIX - Gestión de Estudios Jurídicos");
-        lblTitulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
+        Label lblTitulo = new Label("⚖ Juridix");
+        lblTitulo.getStyleClass().add("topbar-title");
 
 
         // ============ BÚSQUEDA GLOBAL (NUEVO) ============
@@ -204,7 +216,7 @@ public class MainController {
         lblUsuario.setStyle("-fx-text-fill: white; -fx-font-size: 14px;");
 
         Button btnCerrarSesion = new Button("Cerrar Sesión");
-        btnCerrarSesion.getStyleClass().addAll("button", "button-danger");
+        btnCerrarSesion.setStyle("-fx-background-color: rgba(255,255,255,0.15); -fx-text-fill: white; -fx-border-color: rgba(255,255,255,0.3); -fx-border-width: 0.5px; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-cursor: hand; -fx-padding: 6 12 6 12;");
         btnCerrarSesion.setOnAction(e -> cerrarSesion());
 
         //barra.getChildren().addAll(lblTitulo, txtBusquedaGlobal, btnBuscar, spacer, lblUsuario, btnCerrarSesion);
@@ -234,51 +246,127 @@ public class MainController {
     }
 
     private VBox crearPanelPrincipal() {
-        VBox panel = new VBox(10);
-        panel.setPadding(new Insets(10));
+        VBox panel = new VBox(0);
 
-        TabPane tabPane = new TabPane();
+        // Contenedor principal: sidebar + contenido
+        HBox mainContainer = new HBox(0);
+        VBox.setVgrow(mainContainer, Priority.ALWAYS);
 
-        // Pestaña Dashboard
-        Tab tabDashboard = new Tab("📊 Dashboard");
-        tabDashboard.setClosable(false);
-        tabDashboard.setContent(crearPanelDashboard());
+        // ── SIDEBAR ──
+        VBox sidebar = new VBox(1);
+        sidebar.setStyle("-fx-background-color: #0C447C; -fx-min-width: 200px; -fx-pref-width: 200px; -fx-max-width: 200px; -fx-padding: 10 8 10 8;");
+        VBox.setVgrow(sidebar, Priority.ALWAYS);
 
-        // Pestaña Expedientes
-        Tab tabExpedientes = new Tab("📁 Expedientes");
-        tabExpedientes.setClosable(false);
-        tabExpedientes.setContent(crearPanelExpedientes());
+        // Logo area
+        VBox logoArea = new VBox(2);
+        logoArea.setStyle("-fx-padding: 8 8 14 8; -fx-border-color: rgba(255,255,255,0.10); -fx-border-width: 0 0 0.5 0;");
+        Label lblAppName = new Label("⚖ Juridix");
+        lblAppName.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: white;");
+        Label lblAppSub = new Label("Estudio Jurídico");
+        lblAppSub.setStyle("-fx-font-size: 11px; -fx-text-fill: #85B7EB;");
+        logoArea.getChildren().addAll(lblAppName, lblAppSub);
 
-        // Pestaña Clientes ← VERIFICAR QUE ESTÉ ESTA LÍNEA
-        Tab tabClientes = new Tab("👥 Clientes");
-        tabClientes.setClosable(false);
-        tabClientes.setContent(crearPanelClientes());
+        // Nav items
+        Label lblPrincipal = new Label("PRINCIPAL");
+        lblPrincipal.setStyle("-fx-font-size: 10px; -fx-text-fill: #378ADD; -fx-padding: 12 8 4 8; -fx-font-weight: bold;");
 
-        // Pestaña Agenda
-        Tab tabAgenda = new Tab("📅 Agenda");
-        tabAgenda.setClosable(false);
-        tabAgenda.setContent(crearPanelAgenda());
+        Button btnDashboard   = crearNavItem("◼  Dashboard");
+        Button btnExpedientes = crearNavItem("▤  Expedientes");
+        Button btnClientes    = crearNavItem("◉  Clientes");
 
-        panel.getChildren().add(tabPane);
-        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        Label lblGestion = new Label("GESTIÓN");
+        lblGestion.setStyle("-fx-font-size: 10px; -fx-text-fill: #378ADD; -fx-padding: 12 8 4 8; -fx-font-weight: bold;");
 
-        // Pestaña Economía (NUEVA)
-        Tab tabEconomia = new Tab("💰 Economía");
-        tabEconomia.setClosable(false);
-        tabEconomia.setContent(crearPanelEconomia());
+        Button btnAgenda   = crearNavItem("▦  Agenda");
+        Button btnEconomia = crearNavItem("◈  Economía");
 
-        // ========== PESTAÑA USUARIOS (SOLO ADMIN) ==========
-        if (SesionUsuario.getUsuarioActual().getRol() == RolUsuario.ADMIN) {
-            Tab tabUsuarios = new Tab("👥 Usuarios");
-            tabUsuarios.setClosable(false);
-            tabUsuarios.setContent(crearPanelUsuarios());
+        // Área de contenido
+        StackPane contentArea = new StackPane();
+        contentArea.setStyle("-fx-background-color: #F4F4F2;");
+        HBox.setHgrow(contentArea, Priority.ALWAYS);
+        VBox.setVgrow(contentArea, Priority.ALWAYS);
 
-            tabPane.getTabs().add(tabUsuarios);
+        // Vistas
+        VBox viewDashboard   = crearPanelDashboard();
+        VBox viewExpedientes = crearPanelExpedientes();
+        VBox viewClientes    = crearPanelClientes();
+        VBox viewAgenda      = crearPanelAgenda();
+        VBox viewEconomia    = crearPanelEconomia();
+
+        contentArea.getChildren().add(viewDashboard);
+
+        // Acción de navegación
+        Runnable[] acciones = new Runnable[5];
+        Button[] botones = {btnDashboard, btnExpedientes, btnClientes, btnAgenda, btnEconomia};
+        VBox[] vistas = {viewDashboard, viewExpedientes, viewClientes, viewAgenda, viewEconomia};
+
+        for (int i = 0; i < botones.length; i++) {
+            final int idx = i;
+            botones[i].setOnAction(e -> {
+                contentArea.getChildren().setAll(vistas[idx]);
+                for (Button b : botones) {
+                    b.setStyle(estiloNavItem(false));
+                }
+                botones[idx].setStyle(estiloNavItem(true));
+            });
         }
 
-        tabPane.getTabs().addAll(tabDashboard, tabExpedientes, tabClientes, tabAgenda, tabEconomia);
+        // Activo inicial
+        btnDashboard.setStyle(estiloNavItem(true));
+
+        // Panel admin usuarios
+        if (SesionUsuario.getUsuarioActual().getRol() == RolUsuario.ADMIN) {
+            Label lblSistema = new Label("SISTEMA");
+            lblSistema.setStyle("-fx-font-size: 10px; -fx-text-fill: #378ADD; -fx-padding: 12 8 4 8; -fx-font-weight: bold;");
+            Button btnUsuarios = crearNavItem("◎  Usuarios");
+            VBox viewUsuarios = crearPanelUsuarios();
+            btnUsuarios.setOnAction(e -> {
+                contentArea.getChildren().setAll(viewUsuarios);
+                for (Button b : botones) b.setStyle(estiloNavItem(false));
+                btnUsuarios.setStyle(estiloNavItem(true));
+            });
+            sidebar.getChildren().addAll(lblSistema, btnUsuarios);
+            // Agregar al sidebar antes del footer
+        }
+
+        sidebar.getChildren().addAll(logoArea, lblPrincipal, btnDashboard,
+                lblGestion, btnExpedientes, btnClientes, btnAgenda, btnEconomia);
+
+        // Footer usuario
+        Region spacerSidebar = new Region();
+        VBox.setVgrow(spacerSidebar, Priority.ALWAYS);
+        HBox footerUser = new HBox(8);
+        footerUser.setStyle("-fx-padding: 12 8 8 8; -fx-border-color: rgba(255,255,255,0.10); -fx-border-width: 0.5 0 0 0;");
+        footerUser.setAlignment(Pos.CENTER_LEFT);
+        Label lblUser = new Label("👤  " + SesionUsuario.getUsuarioActual().getUsername());
+        lblUser.setStyle("-fx-font-size: 12px; -fx-text-fill: #B5D4F4;");
+        footerUser.getChildren().add(lblUser);
+        sidebar.getChildren().addAll(spacerSidebar, footerUser);
+
+        mainContainer.getChildren().addAll(sidebar, contentArea);
+        panel.getChildren().add(mainContainer);
 
         return panel;
+    }
+
+    private Button crearNavItem(String texto) {
+        Button btn = new Button(texto);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setAlignment(Pos.CENTER_LEFT);
+        btn.setStyle(estiloNavItem(false));
+        return btn;
+    }
+
+    private String estiloNavItem(boolean activo) {
+        if (activo) {
+            return "-fx-background-color: #185FA5; -fx-text-fill: white; -fx-font-size: 13px; " +
+                    "-fx-padding: 8 10 8 10; -fx-background-radius: 6px; -fx-cursor: hand; " +
+                    "-fx-alignment: CENTER_LEFT; -fx-border-width: 0;";
+        } else {
+            return "-fx-background-color: transparent; -fx-text-fill: #B5D4F4; -fx-font-size: 13px; " +
+                    "-fx-padding: 8 10 8 10; -fx-background-radius: 6px; -fx-cursor: hand; " +
+                    "-fx-alignment: CENTER_LEFT; -fx-border-width: 0;";
+        }
     }
 
 
@@ -286,27 +374,27 @@ public class MainController {
 
     private VBox crearPanelDashboard() {
         VBox panel = new VBox(20);
-        panel.setPadding(new Insets(20));
+        panel.setPadding(new Insets(24, 32, 24, 32));
 
-        Label titulo = new Label("Panel de Control");
-        titulo.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        Label titulo = new Label("Dashboard");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
 
         // Tarjetas de estadísticas
-        HBox tarjetas = new HBox(20);
-        tarjetas.setAlignment(Pos.CENTER);
+        HBox tarjetas = new HBox(12);
+        tarjetas.setAlignment(Pos.CENTER_LEFT);
 
         // Crear tarjetas y guardar referencias a los labels de valores
         VBox tarjetaExpedientes = new VBox(5);
         tarjetaExpedientes.setAlignment(Pos.CENTER);
         tarjetaExpedientes.setPadding(new Insets(10));
         tarjetaExpedientes.setPrefSize(200, 120);
-        tarjetaExpedientes.setStyle("-fx-background-color: white; -fx-border-color: #3498db; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        tarjetaExpedientes.getStyleClass().add("stat-card");
 
         Label lblTituloExp = new Label("Total Expedientes");
-        lblTituloExp.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+        lblTituloExp.getStyleClass().add("stat-label");
 
         lblTotalExpedientes = new Label("0");
-        lblTotalExpedientes.setStyle("-fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: #3498db;");
+        lblTotalExpedientes.getStyleClass().add("stat-value");
 
         tarjetaExpedientes.getChildren().addAll(lblTituloExp, lblTotalExpedientes);
 
@@ -315,13 +403,13 @@ public class MainController {
         tarjetaActivos.setAlignment(Pos.CENTER);
         tarjetaActivos.setPadding(new Insets(10));
         tarjetaActivos.setPrefSize(200, 120);
-        tarjetaActivos.setStyle("-fx-background-color: white; -fx-border-color: #27ae60; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        tarjetaActivos.getStyleClass().add("stat-card");
 
         Label lblTituloAct = new Label("Activos");
-        lblTituloAct.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+        lblTituloAct.getStyleClass().add("stat-label");
 
         lblExpedientesActivos = new Label("0");
-        lblExpedientesActivos.setStyle("-fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: #27ae60;");
+        lblExpedientesActivos.getStyleClass().add("stat-value");
 
         tarjetaActivos.getChildren().addAll(lblTituloAct, lblExpedientesActivos);
 
@@ -333,13 +421,13 @@ public class MainController {
         tarjetaEventosHoy.setAlignment(Pos.CENTER);
         tarjetaEventosHoy.setPadding(new Insets(10));
         tarjetaEventosHoy.setPrefSize(200, 120);
-        tarjetaEventosHoy.setStyle("-fx-background-color: white; -fx-border-color: #f39c12; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        tarjetaEventosHoy.getStyleClass().add("stat-card");
 
         Label lblTituloHoy = new Label("Eventos Hoy");
-        lblTituloHoy.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+        lblTituloHoy.getStyleClass().add("stat-label");
 
         lblEventosHoy = new Label("0");
-        lblEventosHoy.setStyle("-fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: #f39c12;");
+        lblEventosHoy.getStyleClass().add("stat-value");
 
         tarjetaEventosHoy.getChildren().addAll(lblTituloHoy, lblEventosHoy);
 
@@ -348,13 +436,13 @@ public class MainController {
         tarjetaEventosSemana.setAlignment(Pos.CENTER);
         tarjetaEventosSemana.setPadding(new Insets(10));
         tarjetaEventosSemana.setPrefSize(200, 120);
-        tarjetaEventosSemana.setStyle("-fx-background-color: white; -fx-border-color: #9b59b6; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
+        tarjetaEventosSemana.getStyleClass().add("stat-card");
 
         Label lblTituloSemana = new Label("Esta Semana");
-        lblTituloSemana.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+        lblTituloSemana.getStyleClass().add("stat-label");
 
         lblEventosSemana = new Label("0");
-        lblEventosSemana.setStyle("-fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: #9b59b6;");
+        lblEventosSemana.getStyleClass().add("stat-value");
 
         tarjetaEventosSemana.getChildren().addAll(lblTituloSemana, lblEventosSemana);
 
@@ -378,7 +466,7 @@ public class MainController {
 // Panel izquierdo: Próximos eventos
         VBox panelEventos = new VBox(10);
         panelEventos.setPadding(new Insets(15));
-        panelEventos.setStyle("-fx-background-color: white; -fx-border-color: #bdc3c7; -fx-border-width: 1; -fx-border-radius: 5;");
+        panelEventos.getStyleClass().add("card");
         HBox.setHgrow(panelEventos, Priority.ALWAYS);
 
         Label lblProximos = new Label("📅 Próximos Eventos");
@@ -641,7 +729,7 @@ public class MainController {
     private VBox crearPanelNotificaciones() {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(15));
-        panel.setStyle("-fx-background-color: white; -fx-border-color: #bdc3c7; -fx-border-width: 1; -fx-border-radius: 5;");
+        panel.getStyleClass().add("card");
 
         Label lblTitulo = new Label("🔔 Notificaciones y Alertas");
         lblTitulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -838,7 +926,7 @@ public class MainController {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button btnNuevo = new Button("➕ Nuevo Expediente");
-        btnNuevo.getStyleClass().addAll("button", "button-success");
+        btnNuevo.getStyleClass().add("btn-primary");
         btnNuevo.setOnAction(e -> abrirFormularioNuevoExpediente());
 
         header.getChildren().addAll(titulo, spacer, btnNuevo);
@@ -1048,23 +1136,6 @@ public class MainController {
 
         BorderPane root = new BorderPane();
 
-        // Header con info del expediente
-        VBox header = new VBox(5);
-        header.setPadding(new Insets(15));
-        header.setStyle("-fx-background-color: #3498db;");
-
-        Label lblNumero = new Label("📁 " + expedienteSeleccionado.getNumero());
-        lblNumero.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
-
-        Label lblCaratula = new Label(expedienteSeleccionado.getCaratula());
-        lblCaratula.setStyle("-fx-font-size: 14px; -fx-text-fill: white;");
-
-        Label lblCliente = new Label("Cliente: " + expedienteSeleccionado.getCliente());
-        lblCliente.setStyle("-fx-text-fill: white;");
-
-        header.getChildren().addAll(lblNumero, lblCaratula, lblCliente);
-        root.setTop(header);
-
         // TabPane con las diferentes secciones
         TabPane tabPane = new TabPane();
 
@@ -1103,9 +1174,15 @@ public class MainController {
         footer.getChildren().add(btnCerrar);
         root.setBottom(footer);
 
-        Scene scene = new Scene(root, 1000, 1000);
+        // ✅ CAMBIOS AQUÍ: Tamaño 1000x650 en lugar de 1000x1000
+        Scene scene = new Scene(root, 1000, 650);
         scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
+
         ventana.setScene(scene);
+        ventana.setResizable(true);    // ✅ Permitir redimensionar
+        ventana.setMaximized(false);   // ✅ NO maximizar automáticamente
+        ventana.centerOnScreen();      // ✅ Centrar en pantalla
+
         ventana.showAndWait();
     }
 
@@ -1308,7 +1385,7 @@ public class MainController {
         });
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             Movimiento sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -1449,7 +1526,7 @@ public class MainController {
         });
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             DocumentoExpediente sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -1484,141 +1561,142 @@ public class MainController {
         VBox panel = new VBox(15);
         panel.setPadding(new Insets(20));
 
-        // ========== RESUMEN ECONÓMICO ==========
+        // Resumen económico
         VBox resumen = crearResumenEconomico();
 
-        // ========== TABPANE CON DETALLE ==========
-        TabPane tabDetalle = new TabPane();
+        // TabPane con las 4 pestañas
+        TabPane tabPaneEconomia = new TabPane();
 
-        // Tab Cuotas (NUEVO - Primera pestaña)
-        Tab tabCuotas = new Tab("📋 Plan de Cuotas");
+        Tab tabCuotas = new Tab("💵 Plan de Cuotas");
         tabCuotas.setClosable(false);
-        tabCuotas.setContent(crearPanelCuotasDetalle());
 
-        // Tab Honorarios
-        Tab tabHon = new Tab("💵 Honorarios");
-        tabHon.setClosable(false);
-        tabHon.setContent(crearPanelHonorariosDetalle());
+        // ✅ IMPORTANTE: Envolver en ScrollPane
+        ScrollPane scrollCuotas = new ScrollPane(crearPanelCuotasDetalle());
+        scrollCuotas.setFitToWidth(true);
+        scrollCuotas.setStyle("-fx-background-color: transparent;");
+        tabCuotas.setContent(scrollCuotas);
 
-        // Tab Pagos (ahora muestra "otros pagos")
-        Tab tabPagos = new Tab("💳 Otros Pagos");
-        tabPagos.setClosable(false);
-        tabPagos.setContent(crearPanelPagosDetalle());
+        Tab tabHonorarios = new Tab("⚖️ Honorarios");
+        tabHonorarios.setClosable(false);
 
-        // Tab Gastos
-        Tab tabGastos = new Tab("💸 Gastos");
+        // ✅ IMPORTANTE: Envolver en ScrollPane
+        ScrollPane scrollHonorarios = new ScrollPane(crearPanelHonorariosDetalle());
+        scrollHonorarios.setFitToWidth(true);
+        scrollHonorarios.setStyle("-fx-background-color: transparent;");
+        tabHonorarios.setContent(scrollHonorarios);
+
+        Tab tabOtrosPagos = new Tab("💰 Otros Pagos");
+        tabOtrosPagos.setClosable(false);
+
+        // ✅ IMPORTANTE: Envolver en ScrollPane
+        ScrollPane scrollPagos = new ScrollPane(crearPanelPagosDetalle());
+        scrollPagos.setFitToWidth(true);
+        scrollPagos.setStyle("-fx-background-color: transparent;");
+        tabOtrosPagos.setContent(scrollPagos);
+
+        Tab tabGastos = new Tab("📉 Gastos");
         tabGastos.setClosable(false);
-        tabGastos.setContent(crearPanelGastosDetalle());
 
-        tabDetalle.getTabs().addAll(tabCuotas, tabHon, tabPagos, tabGastos);
+        // ✅ IMPORTANTE: Envolver en ScrollPane
+        ScrollPane scrollGastos = new ScrollPane(crearPanelGastosDetalle());
+        scrollGastos.setFitToWidth(true);
+        scrollGastos.setStyle("-fx-background-color: transparent;");
+        tabGastos.setContent(scrollGastos);
 
-        panel.getChildren().addAll(resumen, tabDetalle);
-        VBox.setVgrow(tabDetalle, Priority.ALWAYS);
+        tabPaneEconomia.getTabs().addAll(tabCuotas, tabHonorarios, tabOtrosPagos, tabGastos);
+
+        // ✅ IMPORTANTE: El TabPane debe crecer para llenar el espacio
+        VBox.setVgrow(tabPaneEconomia, Priority.ALWAYS);
+
+        panel.getChildren().addAll(resumen, tabPaneEconomia);
 
         return panel;
     }
 
     private VBox crearResumenEconomico() {
-        VBox resumen = new VBox(10);
-        resumen.setPadding(new Insets(15));
-        resumen.setStyle("-fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-radius: 5; -fx-background-radius: 5;");
+        VBox panel = new VBox(5);
+        panel.setPadding(new Insets(10));
+        panel.getStyleClass().add("card");
 
-        Label lblTituloResumen = new Label("💰 Resumen Económico");
-        lblTituloResumen.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        Label titulo = new Label("💰 Resumen Económico");
+        titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-        GridPane gridResumen = new GridPane();
-        gridResumen.setHgap(20);
-        gridResumen.setVgap(10);
+        // ✅ GRID COMPACTO: 2 columnas x 4 filas
+        GridPane grid = new GridPane();
+        grid.setHgap(30); // Espacio horizontal entre columnas
+        grid.setVgap(5);  // Espacio vertical entre filas
+        grid.setPadding(new Insets(5, 0, 5, 0));
+
+        int row = 0;
+
+        // Calcular totales
+        double totalCuotasAcordado = 0;
+        double totalCuotasPagado = 0;
+        double totalHonorarios = 0;
+        double totalOtrosPagos = 0;
+        double totalGastos = 0;
 
         try {
-            // Calcular totales
             List<Cuota> cuotas = cuotaService.listarCuotasPorExpediente(expedienteSeleccionado.getId());
+            for (Cuota c : cuotas) {
+                totalCuotasAcordado += c.getMontoTotalAcordado();
+                totalCuotasPagado += c.getMontoPagado();
+            }
+
             List<Honorario> honorarios = honorarioService.listarPorExpediente(expedienteSeleccionado.getId());
-            List<Gasto> gastos = gastoService.listarPorExpediente(expedienteSeleccionado.getId());
+            for (Honorario h : honorarios) {
+                totalHonorarios += h.getMontoCalculado();
+            }
+
             List<Pago> pagos = pagoService.listarPorExpediente(expedienteSeleccionado.getId());
-
-            // Totales de cuotas
-            double totalCuotasAcordado = cuotas.stream()
-                    .mapToDouble(Cuota::getMontoTotalAcordado)
-                    .sum();
-
-            double totalCuotasPagado = cuotas.stream()
-                    .mapToDouble(Cuota::getMontoPagado)
-                    .sum();
-
-            double totalHonorarios = honorarios.stream()
-                    .mapToDouble(h -> h.getMontoCalculado() != null ? h.getMontoCalculado() : 0)
-                    .sum();
-
-            double totalGastos = gastos.stream()
-                    .mapToDouble(Gasto::getMonto)
-                    .sum();
-
-            double totalOtrosPagos = pagos.stream()
-                    .mapToDouble(Pago::getMonto)
-                    .sum();
-
-            double totalPagosRecibidos = totalCuotasPagado + totalOtrosPagos;
-            double pendienteCobro = (totalCuotasAcordado + totalHonorarios) - totalPagosRecibidos;
-
-            int row = 0;
-
-            // Cuotas Acordadas
-            gridResumen.add(new Label("Plan de Cuotas (Acordado):"), 0, row);
-            Label lblCuotas = new Label(formatearMoneda(totalCuotasAcordado));
-            lblCuotas.setStyle("-fx-font-weight: bold; -fx-text-fill: #8e44ad;");
-            gridResumen.add(lblCuotas, 1, row++);
-
-            // Cuotas Pagadas
-            gridResumen.add(new Label("Cuotas Pagadas:"), 0, row);
-            Label lblCuotasPag = new Label(formatearMoneda(totalCuotasPagado));
-            lblCuotasPag.setStyle("-fx-font-weight: bold; -fx-text-fill: #27ae60;");
-            gridResumen.add(lblCuotasPag, 1, row++);
-
-            // Honorarios Adicionales
-            if (totalHonorarios > 0) {
-                gridResumen.add(new Label("Honorarios Adicionales:"), 0, row);
-                Label lblHon = new Label(formatearMoneda(totalHonorarios));
-                lblHon.setStyle("-fx-font-weight: bold; -fx-text-fill: #2980b9;");
-                gridResumen.add(lblHon, 1, row++);
+            for (Pago p : pagos) {
+                totalOtrosPagos += p.getMonto();
             }
 
-            // Otros Pagos
-            if (totalOtrosPagos > 0) {
-                gridResumen.add(new Label("Otros Pagos:"), 0, row);
-                Label lblOtros = new Label(formatearMoneda(totalOtrosPagos));
-                lblOtros.setStyle("-fx-font-weight: bold; -fx-text-fill: #16a085;");
-                gridResumen.add(lblOtros, 1, row++);
+            List<Gasto> gastos = gastoService.listarPorExpediente(expedienteSeleccionado.getId());
+            for (Gasto g : gastos) {
+                totalGastos += g.getMonto();
             }
-
-            // Gastos del Trámite
-            gridResumen.add(new Label("Gastos del Trámite:"), 0, row);
-            Label lblGast = new Label(formatearMoneda(totalGastos));
-            lblGast.setStyle("-fx-font-weight: bold; -fx-text-fill: #e67e22;");
-            gridResumen.add(lblGast, 1, row++);
-
-            gridResumen.add(new Separator(), 0, row, 2, 1);
-            row++;
-
-            // Total Pagos Recibidos
-            gridResumen.add(new Label("Total Pagos Recibidos:"), 0, row);
-            Label lblTotalPagos = new Label(formatearMoneda(totalPagosRecibidos));
-            lblTotalPagos.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #27ae60;");
-            gridResumen.add(lblTotalPagos, 1, row++);
-
-            // Pendiente de Cobro
-            gridResumen.add(new Label("Pendiente de Cobro:"), 0, row);
-            Label lblPend = new Label(formatearMoneda(pendienteCobro));
-            lblPend.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " +
-                    (pendienteCobro > 0 ? "#e74c3c" : "#27ae60") + ";");
-            gridResumen.add(lblPend, 1, row++);
-
         } catch (SQLException e) {
-            mostrarError("Error al calcular resumen: " + e.getMessage());
+            mostrarError("Error: " + e.getMessage());
         }
 
-        resumen.getChildren().addAll(lblTituloResumen, gridResumen);
-        return resumen;
+        double totalPagosRecibidos = totalCuotasPagado + totalOtrosPagos;
+        double pendienteCobro = (totalCuotasAcordado + totalHonorarios) - totalPagosRecibidos;
+
+        // COLUMNA 1
+        grid.add(crearLabelInfo("Plan Cuotas:", formatearMoneda(totalCuotasAcordado), "#9b59b6"), 0, row++);
+        grid.add(crearLabelInfo("Cuotas Pagadas:", formatearMoneda(totalCuotasPagado), "#27ae60"), 0, row++);
+        grid.add(crearLabelInfo("Honorarios:", formatearMoneda(totalHonorarios), "#2980b9"), 0, row++);
+        grid.add(crearLabelInfo("Otros Pagos:", formatearMoneda(totalOtrosPagos), "#16a085"), 0, row++);
+
+        // COLUMNA 2
+        row = 0;
+        grid.add(crearLabelInfo("Gastos:", formatearMoneda(totalGastos), "#e67e22"), 1, row++);
+        grid.add(crearLabelInfo("Total Recibido:", formatearMoneda(totalPagosRecibidos), "#27ae60"), 1, row++);
+        grid.add(crearLabelInfo("Pendiente:", formatearMoneda(pendienteCobro), pendienteCobro > 0 ? "#e74c3c" : "#95a5a6"), 1, row++);
+        // Fila vacía para igualar alturas
+        grid.add(new Label(""), 1, row++);
+
+        panel.getChildren().addAll(titulo, grid);
+
+        return panel;
+    }
+
+    // ✅ MÉTODO AUXILIAR para crear labels compactos
+    private HBox crearLabelInfo(String etiqueta, String valor, String color) {
+        HBox box = new HBox(5);
+        box.setAlignment(Pos.CENTER_LEFT);
+
+        Label lbl = new Label(etiqueta);
+        lbl.setStyle("-fx-font-size: 11px;");
+        lbl.setPrefWidth(120);
+
+        Label val = new Label(valor);
+        val.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+
+        box.getChildren().addAll(lbl, val);
+        return box;
     }
 
     private VBox crearPanelCuotasDetalle() {
@@ -1639,6 +1717,8 @@ public class MainController {
 
         // Tabla de cuotas
         TableView<Cuota> tabla = new TableView<>();
+        tabla.setPrefHeight(300); // ✅ AGREGAR ESTA LÍNEA
+        tabla.setMaxHeight(400);  // ✅ AGREGAR ESTA LÍNEA
         ObservableList<Cuota> lista = FXCollections.observableArrayList();
         tabla.setItems(lista);
 
@@ -1718,7 +1798,7 @@ public class MainController {
         });
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             Cuota sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -2119,7 +2199,7 @@ public class MainController {
         });
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             PagoCuota sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -2355,7 +2435,7 @@ public class MainController {
 
         // Botón eliminar
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             Honorario sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -2440,7 +2520,7 @@ public class MainController {
 
         // Botón eliminar
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             Pago sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -2544,7 +2624,7 @@ public class MainController {
 
         // Botón eliminar
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             Gasto sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
@@ -2830,7 +2910,7 @@ public class MainController {
         btnNuevo.setOnAction(e -> limpiarFormularioExpediente());
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> eliminarExpediente());
 
         Button btnMovimientos = new Button("📋 Ver Movimientos");
@@ -2942,6 +3022,7 @@ public class MainController {
 
         tablaExpedientes = new TableView<>();
         tablaExpedientes.setItems(listaExpedientes);
+        tablaExpedientes.getStyleClass().add("table-view");
 
         TableColumn<Expediente, String> colNumero = new TableColumn<>("Número");
         colNumero.setCellValueFactory(new PropertyValueFactory<>("numero"));
@@ -3065,7 +3146,7 @@ public class MainController {
         });
 
         Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().addAll("button", "button-danger");
+        btnEliminar.getStyleClass().add("btn-danger");
         btnEliminar.setOnAction(e -> {
             Movimiento seleccionado = tablaMovimientos.getSelectionModel().getSelectedItem();
             if (seleccionado != null) {
@@ -3223,7 +3304,7 @@ public class MainController {
         botonesSuperiores.setAlignment(Pos.CENTER_LEFT);
 
         Button btnNuevoEvento = new Button("➕ Nuevo Evento");
-        btnNuevoEvento.getStyleClass().addAll("button", "button-success");
+        btnNuevoEvento.getStyleClass().add("btn-primary");
         btnNuevoEvento.setOnAction(e -> abrirFormularioEvento(null));
 
         Button btnActualizar = new Button("🔄 Actualizar");
@@ -3249,6 +3330,7 @@ public class MainController {
         TableView<EventoAgenda> tabla = new TableView<>();
         ObservableList<EventoAgenda> listaEventos = FXCollections.observableArrayList();
         tabla.setItems(listaEventos);
+        tabla.getStyleClass().add("table-view");
 
         // Guardar referencia para poder actualizarla
         tabla.setUserData(listaEventos);
@@ -3320,7 +3402,7 @@ public class MainController {
                     }
                 });
 
-                btnEliminar.getStyleClass().addAll("button", "button-danger");
+                btnEliminar.getStyleClass().add("btn-danger");
                 btnEliminar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
 
@@ -3901,7 +3983,7 @@ public class MainController {
     private HBox crearBarraEstado() {
         HBox barra = new HBox();
         barra.setPadding(new Insets(5));
-        //barra.setStyle("-fx-background-color: #ecf0f1;");
+        //barra.setStyle("-fx-background-color: #F8F8F6;");
         barra.getStyleClass().add("status-bar");
 
         Label lblEstado = new Label("✅ Sistema listo");
@@ -3932,7 +4014,7 @@ public class MainController {
         txtBuscarCliente.textProperty().addListener((obs, old, val) -> buscarClientes());
 
         Button btnNuevoCliente = new Button("➕ Nuevo Cliente");
-        btnNuevoCliente.getStyleClass().addAll("button", "button-success");
+        btnNuevoCliente.getStyleClass().add("btn-primary");;
         btnNuevoCliente.setOnAction(e -> abrirFormularioCliente(null));
 
         Button btnActualizar = new Button("🔄 Actualizar");
@@ -3951,6 +4033,7 @@ public class MainController {
         // Tabla de clientes
         tablaClientes = new TableView<>();
         tablaClientes.setItems(listaClientes);
+        tablaClientes.getStyleClass().add("table-view");
 
         TableColumn<Cliente, String> colNombre = new TableColumn<>("Nombre Completo");
         colNombre.setCellValueFactory(new PropertyValueFactory<>("nombreCompleto"));
@@ -4420,7 +4503,7 @@ public class MainController {
     private VBox crearPanelDatosCliente(Cliente cliente) {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(15));
-        panel.setStyle("-fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-width: 1;");
+        panel.setStyle("-fx-background-color: #F8F8F6; -fx-border-color: #bdc3c7; -fx-border-width: 1;");
 
         Label titulo = new Label("📋 Información Completa");
         titulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -4659,7 +4742,7 @@ public class MainController {
                     }
                 });
 
-                btnEliminar.getStyleClass().addAll("button", "button-danger");
+                btnEliminar.getStyleClass().add("btn-danger");
                 btnEliminar.setOnAction(e -> {
                     DocumentoCliente doc = getTableView().getItems().get(getIndex());
 
@@ -4952,7 +5035,7 @@ public class MainController {
         Label lblResultado = new Label("Resultado:");
         TextField txtResultadoPlazo = new TextField();
         txtResultadoPlazo.setEditable(false);
-        txtResultadoPlazo.setStyle("-fx-background-color: #ecf0f1; -fx-font-weight: bold; -fx-font-size: 14px;");
+        txtResultadoPlazo.setStyle("-fx-background-color: #F8F8F6; -fx-font-weight: bold; -fx-font-size: 14px;");
 
         Button btnCalcular = new Button("🔢 Calcular Plazo");
         //btnCalcular.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
@@ -5262,7 +5345,7 @@ public class MainController {
                     }
                 });
 
-                btnEliminar.getStyleClass().addAll("button", "button-danger");
+                btnEliminar.getStyleClass().add("btn-danger");
                 btnEliminar.setOnAction(e -> {
                     Honorario h = getTableView().getItems().get(getIndex());
                     if (mostrarConfirmacion("¿Eliminar este honorario?")) {
@@ -5453,7 +5536,7 @@ public class MainController {
         panel.setPadding(new Insets(15));
 
         Button btnNuevo = new Button("➕ Nuevo Gasto");
-        btnNuevo.getStyleClass().addAll("button", "button-danger");
+        btnNuevo.getStyleClass().add("btn-danger");
         btnNuevo.setOnAction(e -> {
             Expediente exp = cmbExpedientes.getValue();
             if (exp != null) {
@@ -5496,7 +5579,7 @@ public class MainController {
                     abrirFormularioGasto(g, g.getExpedienteId());
                 });
 
-                btnEliminar.getStyleClass().addAll("button", "button-danger");
+                btnEliminar.getStyleClass().add("btn-danger");
                 btnEliminar.setOnAction(e -> {
                     Gasto g = getTableView().getItems().get(getIndex());
                     if (mostrarConfirmacion("¿Eliminar este gasto?")) {

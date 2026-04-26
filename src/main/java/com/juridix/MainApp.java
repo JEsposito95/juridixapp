@@ -46,6 +46,7 @@ public class MainApp extends Application {
     }
 
     public static void main(String[] args) {
+        Database.verificarYActualizarEstructura();
         launch(args);
     }
 }

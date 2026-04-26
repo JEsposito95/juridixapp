@@ -4,9 +4,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.*;
 
 public class Database {
     // ✅ Ruta en carpeta del usuario
@@ -69,5 +67,82 @@ public class Database {
      */
     public static String getDatabasePath() {
         return APP_DIR + File.separator + DB_FILE;
+    }
+
+    /**
+     * Verifica y actualiza la estructura de la base de datos
+     */
+    public static void verificarYActualizarEstructura() {
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+
+            // 1. Verificar y agregar columna actor en expedientes
+            ResultSet rs = stmt.executeQuery("PRAGMA table_info(expedientes)");
+            boolean tieneActor = false;
+
+            while (rs.next()) {
+                if ("actor".equals(rs.getString("name"))) {
+                    tieneActor = true;
+                    break;
+                }
+            }
+
+            if (!tieneActor) {
+                stmt.execute("ALTER TABLE expedientes ADD COLUMN actor TEXT");
+                System.out.println("✅ Columna 'actor' agregada a expedientes");
+            }
+
+            // 2. Verificar y crear tabla cuotas si no existe
+            ResultSet rsTables = stmt.executeQuery(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'"
+            );
+
+            if (!rsTables.next()) {
+                // Crear tabla cuotas
+                stmt.execute("""
+                CREATE TABLE cuotas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expediente_id INTEGER NOT NULL,
+                    monto_total_acordado REAL NOT NULL,
+                    monto_pagado REAL DEFAULT 0,
+                    cantidad_cuotas_planificadas INTEGER,
+                    monto_por_cuota REAL,
+                    observaciones TEXT,
+                    fecha_acuerdo DATE NOT NULL,
+                    estado TEXT DEFAULT 'ACTIVO',
+                    usuario_id INTEGER NOT NULL,
+                    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (expediente_id) REFERENCES expedientes(id),
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                )
+            """);
+                System.out.println("✅ Tabla 'cuotas' creada");
+
+                // Crear tabla pagos_cuota
+                stmt.execute("""
+                CREATE TABLE pagos_cuota (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cuota_id INTEGER NOT NULL,
+                    monto REAL NOT NULL,
+                    fecha_pago DATE NOT NULL,
+                    forma_pago TEXT,
+                    numero_cuota INTEGER,
+                    referencia TEXT,
+                    observaciones TEXT,
+                    usuario_id INTEGER NOT NULL,
+                    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (cuota_id) REFERENCES cuotas(id),
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                )
+            """);
+                System.out.println("✅ Tabla 'pagos_cuota' creada");
+            }
+
+            System.out.println("✅ Estructura de BD verificada - OK");
+
+        } catch (SQLException e) {
+            System.err.println("⚠️ Error al verificar estructura: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

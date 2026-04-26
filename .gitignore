@@ -51,4 +51,5 @@ Thumbs.db
 
 
 Juridix/runtime/
-runtime/
+runtime/runtime/
+target/
