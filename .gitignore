@@ -53,3 +53,12 @@ Thumbs.db
 Juridix/runtime/
 runtime/runtime/
 target/
+
+### Juridix - Datos que NO deben versionarse ###
+juridix.db
+juridix.db-shm
+juridix.db-wal
+*.db
+*.db-shm
+*.db-wal
+documentos/
