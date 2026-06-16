@@ -88,7 +88,7 @@ public class MainController {
     private Label lblExpedientesActivos;
     private Label lblEventosHoy;
     private Label lblEventosSemana;
-    private ListView<String> listProximosEventos;
+    private ListView<ItemProximoEvento> listProximosEventos;
 
     // Servicios (agregar junto a los otros servicios)
     private ClienteService clienteService;
@@ -104,7 +104,17 @@ public class MainController {
     private Cliente clienteSeleccionado;
 
     // Agregar junto a los otros componentes
-    private ListView<String> listNotificaciones;
+    private ListView<Notificacion> listNotificaciones;
+
+    private StackPane contentArea;
+    private VBox viewAgenda;
+    private VBox viewExpedientes;
+    private Button navAgenda;
+    private Button navExpedientes;
+
+    private TableView<EventoAgenda> tablaEventos;
+    private final ObservableList<EventoAgenda> listaEventos = FXCollections.observableArrayList();
+    private ComboBox<String> cmbVistaAgenda;
 
 
     public MainController(Stage stage) {
@@ -271,26 +281,28 @@ public class MainController {
         lblPrincipal.setStyle("-fx-font-size: 10px; -fx-text-fill: #378ADD; -fx-padding: 12 8 4 8; -fx-font-weight: bold;");
 
         Button btnDashboard   = crearNavItem("◼  Dashboard");
-        Button btnExpedientes = crearNavItem("▤  Expedientes");
+        navExpedientes = crearNavItem("▤  Expedientes");
+        Button btnExpedientes = navExpedientes;
         Button btnClientes    = crearNavItem("◉  Clientes");
 
         Label lblGestion = new Label("GESTIÓN");
         lblGestion.setStyle("-fx-font-size: 10px; -fx-text-fill: #378ADD; -fx-padding: 12 8 4 8; -fx-font-weight: bold;");
 
-        Button btnAgenda   = crearNavItem("▦  Agenda");
+        navAgenda = crearNavItem("▦  Agenda");
+        Button btnAgenda = navAgenda;
         Button btnEconomia = crearNavItem("◈  Economía");
 
         // Área de contenido
-        StackPane contentArea = new StackPane();
+        contentArea = new StackPane();
         contentArea.setStyle("-fx-background-color: #F4F4F2;");
         HBox.setHgrow(contentArea, Priority.ALWAYS);
         VBox.setVgrow(contentArea, Priority.ALWAYS);
 
         // Vistas
         VBox viewDashboard   = crearPanelDashboard();
-        VBox viewExpedientes = crearPanelExpedientes();
+        viewExpedientes = crearPanelExpedientes();
         VBox viewClientes    = crearPanelClientes();
-        VBox viewAgenda      = crearPanelAgenda();
+        viewAgenda = crearPanelAgenda();
         VBox viewEconomia    = crearPanelEconomia();
 
         contentArea.getChildren().add(viewDashboard);
@@ -376,118 +388,133 @@ public class MainController {
         VBox panel = new VBox(20);
         panel.setPadding(new Insets(24, 32, 24, 32));
 
+        // ===== Encabezado con saludo =====
+        VBox encabezado = new VBox(2);
         Label titulo = new Label("Dashboard");
         titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+        Label subtitulo = new Label("Resumen general del estudio");
+        subtitulo.getStyleClass().add("text-secondary");
+        encabezado.getChildren().addAll(titulo, subtitulo);
 
-        // Tarjetas de estadísticas
-        HBox tarjetas = new HBox(12);
+        // ===== Tarjetas de estadísticas =====
+        HBox tarjetas = new HBox(16);
         tarjetas.setAlignment(Pos.CENTER_LEFT);
 
-        // Crear tarjetas y guardar referencias a los labels de valores
-        VBox tarjetaExpedientes = new VBox(5);
-        tarjetaExpedientes.setAlignment(Pos.CENTER);
-        tarjetaExpedientes.setPadding(new Insets(10));
-        tarjetaExpedientes.setPrefSize(200, 120);
-        tarjetaExpedientes.getStyleClass().add("stat-card");
+        VBox tarjetaExpedientes = crearStatCard("Total Expedientes", "");
+        lblTotalExpedientes = (Label) tarjetaExpedientes.getProperties().get("valueLabel");
 
-        Label lblTituloExp = new Label("Total Expedientes");
-        lblTituloExp.getStyleClass().add("stat-label");
+        VBox tarjetaActivos = crearStatCard("Expedientes Activos", "");
+        lblExpedientesActivos = (Label) tarjetaActivos.getProperties().get("valueLabel");
 
-        lblTotalExpedientes = new Label("0");
-        lblTotalExpedientes.getStyleClass().add("stat-value");
+        VBox tarjetaEventosHoy = crearStatCard("Eventos Hoy", "");
+        lblEventosHoy = (Label) tarjetaEventosHoy.getProperties().get("valueLabel");
 
-        tarjetaExpedientes.getChildren().addAll(lblTituloExp, lblTotalExpedientes);
+        VBox tarjetaEventosSemana = crearStatCard("Esta Semana", "");
+        lblEventosSemana = (Label) tarjetaEventosSemana.getProperties().get("valueLabel");
 
-        // Tarjeta Activos
-        VBox tarjetaActivos = new VBox(5);
-        tarjetaActivos.setAlignment(Pos.CENTER);
-        tarjetaActivos.setPadding(new Insets(10));
-        tarjetaActivos.setPrefSize(200, 120);
-        tarjetaActivos.getStyleClass().add("stat-card");
-
-        Label lblTituloAct = new Label("Activos");
-        lblTituloAct.getStyleClass().add("stat-label");
-
-        lblExpedientesActivos = new Label("0");
-        lblExpedientesActivos.getStyleClass().add("stat-value");
-
-        tarjetaActivos.getChildren().addAll(lblTituloAct, lblExpedientesActivos);
-
-
-
-
-        // Tarjeta Eventos Hoy
-        VBox tarjetaEventosHoy = new VBox(5);
-        tarjetaEventosHoy.setAlignment(Pos.CENTER);
-        tarjetaEventosHoy.setPadding(new Insets(10));
-        tarjetaEventosHoy.setPrefSize(200, 120);
-        tarjetaEventosHoy.getStyleClass().add("stat-card");
-
-        Label lblTituloHoy = new Label("Eventos Hoy");
-        lblTituloHoy.getStyleClass().add("stat-label");
-
-        lblEventosHoy = new Label("0");
-        lblEventosHoy.getStyleClass().add("stat-value");
-
-        tarjetaEventosHoy.getChildren().addAll(lblTituloHoy, lblEventosHoy);
-
-        // Tarjeta Eventos Semana
-        VBox tarjetaEventosSemana = new VBox(5);
-        tarjetaEventosSemana.setAlignment(Pos.CENTER);
-        tarjetaEventosSemana.setPadding(new Insets(10));
-        tarjetaEventosSemana.setPrefSize(200, 120);
-        tarjetaEventosSemana.getStyleClass().add("stat-card");
-
-        Label lblTituloSemana = new Label("Esta Semana");
-        lblTituloSemana.getStyleClass().add("stat-label");
-
-        lblEventosSemana = new Label("0");
-        lblEventosSemana.getStyleClass().add("stat-value");
-
-        tarjetaEventosSemana.getChildren().addAll(lblTituloSemana, lblEventosSemana);
+        HBox.setHgrow(tarjetaExpedientes, Priority.ALWAYS);
+        HBox.setHgrow(tarjetaActivos, Priority.ALWAYS);
+        HBox.setHgrow(tarjetaEventosHoy, Priority.ALWAYS);
+        HBox.setHgrow(tarjetaEventosSemana, Priority.ALWAYS);
 
         tarjetas.getChildren().addAll(tarjetaExpedientes, tarjetaActivos, tarjetaEventosHoy, tarjetaEventosSemana);
 
-        // ========== AGREGAR BOTÓN AQUÍ ==========
-        Button btnMigrarDatos = new Button("🔧 Actualizar vínculos Cliente-Expediente");
-        btnMigrarDatos.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; " +
-                "-fx-font-weight: bold; -fx-font-size: 14px; -fx-padding: 12 25;");
-        btnMigrarDatos.setOnAction(e -> migrarClienteIdEnExpedientes());
-
-        // Centrarlo
-        HBox contenedorBoton = new HBox(btnMigrarDatos);
-        contenedorBoton.setAlignment(Pos.CENTER);
-        contenedorBoton.setPadding(new Insets(10));
-
-        // Panel de próximos eventos Y notificaciones
-        HBox panelInferior = new HBox(15);
+        // ===== Panel inferior: próximos eventos + notificaciones =====
+        HBox panelInferior = new HBox(16);
         panelInferior.setAlignment(Pos.TOP_CENTER);
 
-// Panel izquierdo: Próximos eventos
-        VBox panelEventos = new VBox(10);
-        panelEventos.setPadding(new Insets(15));
+        // --- Próximos eventos ---
+        VBox panelEventos = new VBox();
         panelEventos.getStyleClass().add("card");
         HBox.setHgrow(panelEventos, Priority.ALWAYS);
 
-        Label lblProximos = new Label("📅 Próximos Eventos");
-        lblProximos.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        HBox headerEventos = new HBox();
+        headerEventos.getStyleClass().add("card-header");
+        headerEventos.setAlignment(Pos.CENTER_LEFT);
+        Label lblProximos = new Label("Próximos Eventos");
+        lblProximos.getStyleClass().add("card-title");
+        Region spacerEv = new Region();
+        HBox.setHgrow(spacerEv, Priority.ALWAYS);
+        Button btnActualizarDashboard = new Button("Actualizar");
+        btnActualizarDashboard.getStyleClass().add("btn-ghost");
+        btnActualizarDashboard.setOnAction(e -> cargarDashboard());
+        headerEventos.getChildren().addAll(lblProximos, spacerEv, btnActualizarDashboard);
 
         listProximosEventos = new ListView<>();
-        listProximosEventos.setPrefHeight(200);
+        listProximosEventos.getStyleClass().add("dashboard-list");
+        listProximosEventos.setPrefHeight(220);
+        listProximosEventos.setCellFactory(lv -> new ListCell<ItemProximoEvento>() {
+            @Override
+            protected void updateItem(ItemProximoEvento item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                    return;
+                }
+                if (item.esEncabezado) {
+                    Label lbl = new Label(item.textoEncabezado);
+                    lbl.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #6B6B67;");
+                    HBox box = new HBox(lbl);
+                    box.setPadding(new Insets(6, 0, 2, 0));
+                    setGraphic(box);
+                    setText(null);
+                } else {
+                    Label lblHora = new Label(item.hora);
+                    lblHora.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #185FA5; -fx-min-width: 90px;");
 
-        Button btnActualizarDashboard = new Button("🔄 Actualizar");
-        btnActualizarDashboard.setOnAction(e -> cargarDashboard());
+                    Label lblTitulo = new Label(item.titulo);
+                    lblTitulo.setStyle("-fx-font-size: 14px; -fx-text-fill: #1A1A18;");
 
-        panelEventos.getChildren().addAll(lblProximos, listProximosEventos, btnActualizarDashboard);
+                    Region spacer = new Region();
+                    HBox.setHgrow(spacer, Priority.ALWAYS);
 
-// Panel derecho: Notificaciones y alertas
+                    Label pill = new Label(item.tipo);
+                    pill.getStyleClass().addAll("pill", "pill-" + item.nivelPill);
+
+                    HBox box = new HBox(10, lblHora, lblTitulo, spacer, pill);
+                    box.setAlignment(Pos.CENTER_LEFT);
+                    box.setPadding(new Insets(2, 6, 2, 12));
+                    setGraphic(box);
+                    setText(null);
+                }
+            }
+        });
+        VBox.setVgrow(listProximosEventos, Priority.ALWAYS);
+
+
+        VBox contenidoEventos = new VBox(listProximosEventos);
+        contenidoEventos.setPadding(new Insets(12, 14, 14, 14));
+        VBox.setVgrow(contenidoEventos, Priority.ALWAYS);
+
+        panelEventos.getChildren().addAll(headerEventos, contenidoEventos);
+
+        // --- Notificaciones ---
         VBox panelNotificaciones = crearPanelNotificaciones();
         HBox.setHgrow(panelNotificaciones, Priority.ALWAYS);
 
         panelInferior.getChildren().addAll(panelEventos, panelNotificaciones);
+        VBox.setVgrow(panelInferior, Priority.ALWAYS);
 
-        panel.getChildren().addAll(titulo, tarjetas,contenedorBoton, panelInferior);
+        panel.getChildren().addAll(encabezado, tarjetas, panelInferior);
         return panel;
+    }
+
+    // Crea una tarjeta de estadística con valor accesible vía properties
+    private VBox crearStatCard(String titulo, String valorInicial) {
+        VBox card = new VBox(6);
+        card.getStyleClass().add("stat-card");
+        card.setPrefSize(200, 120);
+
+        Label lblTitulo = new Label(titulo);
+        lblTitulo.getStyleClass().add("stat-label");
+
+        Label lblValor = new Label(valorInicial.isEmpty() ? "—" : valorInicial);
+        lblValor.getStyleClass().add("stat-value");
+
+        card.getChildren().addAll(lblTitulo, lblValor);
+        card.getProperties().put("valueLabel", lblValor);
+        return card;
     }
 
     private void migrarClienteIdEnExpedientes() {
@@ -735,27 +762,43 @@ public class MainController {
         lblTitulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
         listNotificaciones = new ListView<>();
-        listNotificaciones.setPrefHeight(200);
-        listNotificaciones.setCellFactory(lv -> new ListCell<String>() {
+        listNotificaciones.getStyleClass().add("dashboard-list");
+        listNotificaciones.setCellFactory(lv -> new ListCell<Notificacion>() {
             @Override
-            protected void updateItem(String item, boolean empty) {
+            protected void updateItem(Notificacion item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
+                    setGraphic(null);
+                    return;
+                }
 
-                    // Colorear según tipo
-                    if (item.contains("⚠️") || item.contains("🔴")) {
-                        setStyle("-fx-background-color: #ffe6e6; -fx-font-weight: bold;");
-                    } else if (item.contains("📅") || item.contains("🟡")) {
-                        setStyle("-fx-background-color: #fff9e6;");
-                    } else if (item.contains("✅")) {
-                        setStyle("-fx-background-color: #e6ffe6;");
-                    } else if (item.startsWith("   ")) {
-                        setStyle("-fx-padding: 2 2 2 20;"); // Indentar items
-                    }
+                if (item.nivel.equals("header")) {
+                    // Encabezado de sección: texto en negrita, sin pill
+                    Label lbl = new Label(item.texto);
+                    lbl.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #6B6B67;");
+                    setGraphic(lbl);
+                    setText(null);
+                } else if (item.nivel.equals("muted")) {
+                    Label lbl = new Label(item.texto);
+                    lbl.getStyleClass().add("text-secondary");
+                    lbl.setStyle("-fx-font-size: 14px;");
+                    setGraphic(lbl);
+                    setText(null);
+                } else {
+                    // Item con pill de color
+                    Label pill = new Label();
+                    pill.getStyleClass().addAll("pill", "pill-" + item.nivel);
+                    pill.setMinWidth(10);
+                    pill.setText(" ");
+
+                    Label texto = new Label(item.texto);
+                    texto.setStyle("-fx-font-size: 14px; -fx-text-fill: #1A1A18;");
+
+                    HBox box = new HBox(8, pill, texto);
+                    box.setAlignment(Pos.CENTER_LEFT);
+                    setGraphic(box);
+                    setText(null);
                 }
             }
         });
@@ -781,29 +824,58 @@ public class MainController {
             // Estadísticas de agenda
             List<EventoAgenda> eventosHoy = agendaService.listarHoy(usuarioId);
             List<EventoAgenda> eventosSemana = agendaService.listarEstaSemana(usuarioId);
-
             lblEventosHoy.setText(String.valueOf(eventosHoy.size()));
             lblEventosSemana.setText(String.valueOf(eventosSemana.size()));
 
-            // Cargar próximos eventos
+            // Próximos eventos agrupados por día
             List<EventoAgenda> proximos = agendaService.listarProximos(usuarioId, 7);
-            ObservableList<String> eventosTexto = FXCollections.observableArrayList();
+            ObservableList<ItemProximoEvento> items = FXCollections.observableArrayList();
 
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            LocalDate hoy = LocalDate.now();
+            LocalDate manana = hoy.plusDays(1);
+            DateTimeFormatter horaFmt = DateTimeFormatter.ofPattern("HH:mm");
+            DateTimeFormatter diaFmt = DateTimeFormatter.ofPattern("EEEE dd/MM", new java.util.Locale("es", "ES"));
+
+            LocalDate diaActual = null;
             for (EventoAgenda evento : proximos) {
-                String texto = String.format("%s - %s (%s)",
-                        evento.getFechaHora().format(formatter),
+                LocalDate diaEvento = evento.getFechaHora().toLocalDate();
+
+                // Insertar encabezado cuando cambia el día
+                if (!diaEvento.equals(diaActual)) {
+                    diaActual = diaEvento;
+                    String etiqueta;
+                    if (diaEvento.equals(hoy)) {
+                        etiqueta = "HOY · " + diaEvento.format(diaFmt);
+                    } else if (diaEvento.equals(manana)) {
+                        etiqueta = "MAÑANA · " + diaEvento.format(diaFmt);
+                    } else {
+                        etiqueta = diaEvento.format(diaFmt).toUpperCase();
+                    }
+                    items.add(ItemProximoEvento.header(etiqueta));
+                }
+
+                // Color de pill según tipo
+                String nivel = switch (evento.getTipo()) {
+                    case AUDIENCIA -> "red";
+                    case VENCIMIENTO -> "amber";
+                    case REUNION -> "blue";
+                    case PRESENTACION -> "green";
+                    default -> "blue";
+                };
+
+                items.add(ItemProximoEvento.evento(
+                        evento.getFechaHora().format(horaFmt),
                         evento.getTitulo(),
-                        evento.getTipo().getDisplayName()
-                );
-                eventosTexto.add(texto);
+                        evento.getTipo().getDisplayName(),
+                        nivel
+                ));
             }
 
-            if (eventosTexto.isEmpty()) {
-                eventosTexto.add("No hay eventos próximos");
+            if (items.isEmpty()) {
+                items.add(ItemProximoEvento.header("No hay eventos próximos"));
             }
 
-            listProximosEventos.setItems(eventosTexto);
+            listProximosEventos.setItems(items);
 
         } catch (SQLException e) {
             mostrarError("Error al cargar dashboard: " + e.getMessage());
@@ -812,96 +884,80 @@ public class MainController {
     }
 
     private void actualizarNotificaciones() {
-        ObservableList<String> notificaciones = FXCollections.observableArrayList();
+        ObservableList<Notificacion> notificaciones = FXCollections.observableArrayList();
 
         try {
             Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
             LocalDate hoy = LocalDate.now();
             LocalDate manana = hoy.plusDays(1);
+            DateTimeFormatter hm = DateTimeFormatter.ofPattern("HH:mm");
 
-            // ========== EVENTOS DE HOY ==========
+            // Eventos de hoy
             List<EventoAgenda> eventosHoy = agendaService.listarPorFecha(hoy).stream()
                     .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
                     .toList();
 
             if (!eventosHoy.isEmpty()) {
-                notificaciones.add("⚠️ HOY - " + eventosHoy.size() + " evento(s) pendiente(s)");
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+                notificaciones.add(new Notificacion("HOY · " + eventosHoy.size() + " evento(s) pendiente(s)", "header"));
                 for (EventoAgenda evento : eventosHoy) {
-                    String icono = switch (evento.getTipo()) {
-                        case AUDIENCIA -> "⚖️";
-                        case VENCIMIENTO -> "⏰";
-                        case REUNION -> "👥";
-                        case PRESENTACION -> "📝";
-                        default -> "📌";
-                    };
-                    notificaciones.add("   " + icono + " " + evento.getFechaHora().format(formatter) + " - " + evento.getTitulo());
+                    notificaciones.add(new Notificacion(
+                            evento.getFechaHora().format(hm) + "  ·  " + evento.getTitulo(), "red"));
                 }
-                notificaciones.add(""); // Separador
             }
 
-            // ========== EVENTOS DE MAÑANA ==========
+            // Eventos de mañana
             List<EventoAgenda> eventosManana = agendaService.listarPorFecha(manana).stream()
                     .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
                     .toList();
 
             if (!eventosManana.isEmpty()) {
-                notificaciones.add("📅 MAÑANA - " + eventosManana.size() + " evento(s)");
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+                notificaciones.add(new Notificacion("MAÑANA · " + eventosManana.size() + " evento(s)", "header"));
                 for (EventoAgenda evento : eventosManana) {
-                    String icono = switch (evento.getTipo()) {
-                        case AUDIENCIA -> "⚖️";
-                        case VENCIMIENTO -> "⏰";
-                        case REUNION -> "👥";
-                        case PRESENTACION -> "📝";
-                        default -> "📌";
-                    };
-                    notificaciones.add("   " + icono + " " + evento.getFechaHora().format(formatter) + " - " + evento.getTitulo());
+                    notificaciones.add(new Notificacion(
+                            evento.getFechaHora().format(hm) + "  ·  " + evento.getTitulo(), "amber"));
                 }
-                notificaciones.add(""); // Separador
             }
 
-            // ========== PRÓXIMOS 7 DÍAS (sin contar hoy y mañana) ==========
+            // Próximos 7 días (sin hoy ni mañana)
             List<EventoAgenda> proximaSemana = agendaService.listarProximos(usuarioId, 7).stream()
-                    .filter(e -> e.isPendiente() &&
-                            !e.getFechaHora().toLocalDate().equals(hoy) &&
-                            !e.getFechaHora().toLocalDate().equals(manana))
+                    .filter(e -> e.isPendiente()
+                            && !e.getFechaHora().toLocalDate().equals(hoy)
+                            && !e.getFechaHora().toLocalDate().equals(manana))
                     .toList();
 
             if (!proximaSemana.isEmpty()) {
-                notificaciones.add("📆 PRÓXIMOS 7 DÍAS - " + proximaSemana.size() + " evento(s)");
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+                notificaciones.add(new Notificacion("PRÓXIMOS 7 DÍAS · " + proximaSemana.size() + " evento(s)", "header"));
+                DateTimeFormatter dm = DateTimeFormatter.ofPattern("dd/MM HH:mm");
                 for (EventoAgenda evento : proximaSemana) {
-                    notificaciones.add("   📌 " + evento.getFechaHora().format(formatter) + " - " + evento.getTitulo());
+                    notificaciones.add(new Notificacion(
+                            evento.getFechaHora().format(dm) + "  ·  " + evento.getTitulo(), "blue"));
                 }
             }
 
-            // ========== VENCIMIENTOS PRÓXIMOS ==========
+            // Vencimientos próximos
             List<EventoAgenda> vencimientos = agendaService.listarProximos(usuarioId, 7).stream()
                     .filter(e -> e.getTipo() == TipoEvento.VENCIMIENTO && e.isPendiente())
                     .toList();
 
             if (!vencimientos.isEmpty()) {
-                notificaciones.add(""); // Separador
-                notificaciones.add("⏰ VENCIMIENTOS PRÓXIMOS");
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                notificaciones.add(new Notificacion("VENCIMIENTOS PRÓXIMOS", "header"));
+                DateTimeFormatter dmy = DateTimeFormatter.ofPattern("dd/MM/yyyy");
                 for (EventoAgenda v : vencimientos) {
-                    long diasRestantes = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), v.getFechaHora().toLocalDate());
-                    String urgencia = diasRestantes <= 1 ? "🔴" : diasRestantes <= 3 ? "🟡" : "🟢";
-                    notificaciones.add("   " + urgencia + " " + v.getFechaHora().toLocalDate().format(formatter) + " - " + v.getTitulo());
+                    long dias = java.time.temporal.ChronoUnit.DAYS.between(hoy, v.getFechaHora().toLocalDate());
+                    String nivel = dias <= 1 ? "red" : dias <= 3 ? "amber" : "green";
+                    notificaciones.add(new Notificacion(
+                            v.getFechaHora().toLocalDate().format(dmy) + "  ·  " + v.getTitulo(), nivel));
                 }
             }
 
-            // ========== SI NO HAY NADA ==========
+            // Sin notificaciones
             if (notificaciones.isEmpty()) {
-                notificaciones.add("✅ No hay notificaciones pendientes");
-                notificaciones.add("");
-                notificaciones.add("¡Todo al día! 🎉");
+                notificaciones.add(new Notificacion("No hay notificaciones pendientes", "muted"));
+                notificaciones.add(new Notificacion("Todo al día", "muted"));
             }
 
         } catch (SQLException e) {
-            notificaciones.add("❌ Error al cargar notificaciones");
-            notificaciones.add("Detalles: " + e.getMessage());
+            notificaciones.add(new Notificacion("Error al cargar notificaciones", "red"));
             e.printStackTrace();
         }
 
@@ -911,25 +967,28 @@ public class MainController {
     // ==================== EXPEDIENTES ====================
 
     private VBox crearPanelExpedientes() {
-        VBox panel = new VBox(10);
-        panel.setPadding(new Insets(10));
+        VBox panel = new VBox(16);
+        panel.setPadding(new Insets(24, 32, 24, 32));
 
         // Header con botón de nuevo expediente
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(10));
 
-        Label titulo = new Label("📁 Gestión de Expedientes");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        VBox tituloBox = new VBox(2);
+        Label titulo = new Label("Gestión de Expedientes");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+        Label subtitulo = new Label("Listado de causas del estudio");
+        subtitulo.getStyleClass().add("text-secondary");
+        tituloBox.getChildren().addAll(titulo, subtitulo);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button btnNuevo = new Button("➕ Nuevo Expediente");
-        btnNuevo.getStyleClass().add("btn-primary");
-        btnNuevo.setOnAction(e -> abrirFormularioNuevoExpediente());
+        Button btnNuevo = new Button("+  Nuevo Expediente");
+        btnNuevo.getStyleClass().add("btn-primary-lg");
+        btnNuevo.setOnAction(e -> abrirFormularioNuevoExpediente(null));
 
-        header.getChildren().addAll(titulo, spacer, btnNuevo);
+        header.getChildren().addAll(tituloBox, spacer, btnNuevo);
 
         // Panel de búsqueda y tabla
         VBox panelTabla = crearPanelTablaExpedientes();
@@ -940,7 +999,7 @@ public class MainController {
         return panel;
     }
 
-    private void abrirFormularioNuevoExpediente() {
+    private void abrirFormularioNuevoExpediente(Cliente clientePreseleccionado) {
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
         ventana.setTitle("Nuevo Expediente");
@@ -990,6 +1049,13 @@ public class MainController {
             });
         } catch (SQLException e) {
             mostrarError("Error al cargar clientes: " + e.getMessage());
+        }
+        // Preseleccionar cliente si viene de la ficha del cliente
+        if (clientePreseleccionado != null) {
+            cmbClienteModal.getItems().stream()
+                    .filter(c -> c.getId().equals(clientePreseleccionado.getId()))
+                    .findFirst()
+                    .ifPresent(cmbClienteModal::setValue);
         }
         grid.add(cmbClienteModal, 1, row++);
 
@@ -2403,7 +2469,7 @@ public class MainController {
         Button btnNuevo = new Button("➕ Nuevo Honorario");
         btnNuevo.getStyleClass().addAll("button", "button-success");
         btnNuevo.setOnAction(e -> {
-            abrirFormularioHonorario(null, expedienteSeleccionado.getId());
+            abrirFormularioHonorario(null, expedienteSeleccionado.getId(), lista);
             // Recargar la lista
             try {
                 List<Honorario> hons = honorarioService.listarPorExpediente(expedienteSeleccionado.getId());
@@ -2419,7 +2485,7 @@ public class MainController {
         btnEditar.setOnAction(e -> {
             Honorario sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
-                abrirFormularioHonorario(sel, expedienteSeleccionado.getId());
+                abrirFormularioHonorario(sel, expedienteSeleccionado.getId(),lista);
                 // Recargar
                 try {
                     List<Honorario> hons = honorarioService.listarPorExpediente(expedienteSeleccionado.getId());
@@ -2493,7 +2559,42 @@ public class MainController {
         colConcepto.setCellValueFactory(new PropertyValueFactory<>("concepto"));
         colConcepto.setPrefWidth(300);
 
-        tabla.getColumns().addAll(colFecha, colMonto, colForma, colConcepto);
+        TableColumn<Pago, Void> colAcciones = new TableColumn<>("Acciones");
+        colAcciones.setPrefWidth(120);
+        colAcciones.setCellFactory(param -> new TableCell<>() {
+            private final Button btnEditar = new Button("✏️");
+            private final Button btnEliminar = new Button("🗑️");
+
+            {
+                btnEditar.setOnAction(e -> {
+                    Pago p = getTableView().getItems().get(getIndex());
+                    abrirFormularioPago(p, expedienteSeleccionado, lista);
+                });
+
+                btnEliminar.getStyleClass().add("btn-danger");
+                btnEliminar.setOnAction(e -> {
+                    Pago p = getTableView().getItems().get(getIndex());
+                    if (mostrarConfirmacion("¿Eliminar este pago?")) {
+                        try {
+                            pagoService.eliminarPago(p.getId());
+                            lista.remove(p);
+                            mostrarInfo("Pago eliminado");
+                        } catch (SQLException ex) {
+                            mostrarError("Error: " + ex.getMessage());
+                        }
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : new HBox(5, btnEditar, btnEliminar));
+            }
+        });
+
+        tabla.getColumns().addAll(colFecha, colMonto, colForma, colConcepto, colAcciones);
+
 
         // Cargar datos iniciales
         try {
@@ -2506,48 +2607,10 @@ public class MainController {
         // Botón nuevo pago
         Button btnNuevo = new Button("➕ Registrar Pago");
         btnNuevo.getStyleClass().addAll("button", "button-success");
-        btnNuevo.setOnAction(e -> {
-            abrirFormularioPagoSimple();
-            // Recargar la lista
-            try {
-                List<Pago> pagos = pagoService.listarPorExpediente(expedienteSeleccionado.getId());
-                lista.clear();
-                lista.addAll(pagos);
-            } catch (SQLException ex) {
-                mostrarError("Error al recargar: " + ex.getMessage());
-            }
-        });
+        btnNuevo.setOnAction(e -> abrirFormularioPago(null, expedienteSeleccionado, lista));
 
-        // Botón eliminar
-        Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().add("btn-danger");
-        btnEliminar.setOnAction(e -> {
-            Pago sel = tabla.getSelectionModel().getSelectedItem();
-            if (sel != null) {
-                Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
-                confirmacion.setTitle("Confirmar");
-                confirmacion.setHeaderText("¿Eliminar pago?");
 
-                if (confirmacion.showAndWait().get() == ButtonType.OK) {
-                    try {
-                        pagoService.eliminarPago(sel.getId());
-                        lista.remove(sel);
-                        mostrarInfo("Pago eliminado");
-                    } catch (SQLException ex) {
-                        mostrarError("Error: " + ex.getMessage());
-                    }
-                }
-            } else {
-                mostrarAdvertencia("Seleccione un pago");
-            }
-        });
-
-        HBox botones = new HBox(10);
-        botones.setAlignment(Pos.CENTER);
-        botones.setPadding(new Insets(10, 0, 0, 0));
-        botones.getChildren().add(btnEliminar);
-
-        panel.getChildren().addAll(btnNuevo, tabla, botones);
+        panel.getChildren().addAll(btnNuevo, tabla);
         VBox.setVgrow(tabla, Priority.ALWAYS);
 
         return panel;
@@ -2592,7 +2655,7 @@ public class MainController {
         Button btnNuevo = new Button("➕ Nuevo Gasto");
         btnNuevo.getStyleClass().addAll("button", "button-success");
         btnNuevo.setOnAction(e -> {
-            abrirFormularioGasto(null, expedienteSeleccionado.getId());
+            abrirFormularioGasto(null, expedienteSeleccionado.getId(), lista);
             // Recargar la lista
             try {
                 List<Gasto> gastos = gastoService.listarPorExpediente(expedienteSeleccionado.getId());
@@ -2608,7 +2671,7 @@ public class MainController {
         btnEditar.setOnAction(e -> {
             Gasto sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
-                abrirFormularioGasto(sel, expedienteSeleccionado.getId());
+                abrirFormularioGasto(sel, expedienteSeleccionado.getId(), lista);
                 // Recargar
                 try {
                     List<Gasto> gastos = gastoService.listarPorExpediente(expedienteSeleccionado.getId());
@@ -2657,15 +2720,12 @@ public class MainController {
         return panel;
     }
 
-    private void abrirFormularioPagoSimple() {
-        if (expedienteSeleccionado == null) {
-            mostrarAdvertencia("Seleccione un expediente");
-            return;
-        }
+    private void abrirFormularioPago(Pago pago, Expediente expediente, ObservableList<Pago> lista) {
+        boolean esEdicion = (pago != null);
 
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
-        ventana.setTitle("Registrar Pago");
+        ventana.setTitle(esEdicion ? "Editar Pago" : "Registrar Pago");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -2676,12 +2736,13 @@ public class MainController {
 
         // Fecha
         grid.add(new Label("Fecha *:"), 0, row);
-        DatePicker dpFecha = new DatePicker(LocalDate.now());
+        DatePicker dpFecha = new DatePicker(esEdicion ? pago.getFecha() : LocalDate.now());
         grid.add(dpFecha, 1, row++);
 
         // Monto
         grid.add(new Label("Monto *:"), 0, row);
         TextField txtMonto = new TextField();
+        if (esEdicion) txtMonto.setText(String.valueOf(pago.getMonto()));
         grid.add(txtMonto, 1, row++);
 
         // Forma de Pago
@@ -2690,25 +2751,28 @@ public class MainController {
         cmbFormaPago.setItems(FXCollections.observableArrayList(
                 "Efectivo", "Transferencia", "Cheque", "Tarjeta", "Otro"
         ));
-        cmbFormaPago.setValue("Efectivo");
+        cmbFormaPago.setValue(esEdicion ? pago.getFormaPago() : "Efectivo");
         grid.add(cmbFormaPago, 1, row++);
 
         // Referencia
         grid.add(new Label("Referencia:"), 0, row);
         TextField txtRef = new TextField();
         txtRef.setPromptText("Nro. de operación, cheque, etc.");
+        if (esEdicion) txtRef.setText(pago.getReferencia());
         grid.add(txtRef, 1, row++);
 
         // Concepto
         grid.add(new Label("Concepto:"), 0, row);
         TextField txtConcepto = new TextField();
         txtConcepto.setPromptText("Concepto del pago");
+        if (esEdicion) txtConcepto.setText(pago.getConcepto());
         grid.add(txtConcepto, 1, row++);
 
         // Observaciones
         grid.add(new Label("Observaciones:"), 0, row);
         TextArea txtObs = new TextArea();
         txtObs.setPrefRowCount(3);
+        if (esEdicion) txtObs.setText(pago.getObservaciones());
         grid.add(txtObs, 1, row++);
 
         // Botones
@@ -2725,19 +2789,34 @@ public class MainController {
                     return;
                 }
 
-                Pago pago = new Pago();
-                pago.setExpedienteId(expedienteSeleccionado.getId());
-                pago.setClienteId(expedienteSeleccionado.getClienteId());
-                pago.setFecha(dpFecha.getValue());
-                pago.setMonto(Double.parseDouble(txtMonto.getText().trim()));
-                pago.setFormaPago(cmbFormaPago.getValue());
-                pago.setReferencia(txtRef.getText().trim());
-                pago.setConcepto(txtConcepto.getText().trim());
-                pago.setObservaciones(txtObs.getText().trim());
-                pago.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+                Pago p = esEdicion ? pago : new Pago();
+                p.setExpedienteId(expediente.getId());
+                p.setClienteId(expediente.getClienteId());
+                if (!esEdicion) {
+                    p.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
+                }
+                p.setFecha(dpFecha.getValue());
+                p.setMonto(Double.parseDouble(txtMonto.getText().trim()));
+                p.setFormaPago(cmbFormaPago.getValue());
+                p.setReferencia(txtRef.getText().trim());
+                p.setConcepto(txtConcepto.getText().trim());
+                p.setObservaciones(txtObs.getText().trim());
 
-                pagoService.crearPago(pago);
-                mostrarInfo("Pago registrado correctamente");
+                if (esEdicion) {
+                    pagoService.actualizarPago(p);
+                    mostrarInfo("Pago actualizado correctamente");
+                } else {
+                    pagoService.crearPago(p);
+                    mostrarInfo("Pago registrado correctamente");
+                }
+
+                // Recargar la lista
+                if (lista != null) {
+                    List<Pago> pagos = pagoService.listarPorExpediente(expediente.getId());
+                    lista.clear();
+                    lista.addAll(pagos);
+                }
+
                 ventana.close();
 
             } catch (NumberFormatException ex) {
@@ -2755,7 +2834,7 @@ public class MainController {
 
         VBox root = new VBox(15);
         root.getChildren().addAll(
-                new Label("Registrar Pago"),
+                new Label(esEdicion ? "Editar Pago" : "Registrar Pago"),
                 new Separator(),
                 grid,
                 botones
@@ -2986,63 +3065,90 @@ public class MainController {
     }
 
     private VBox crearPanelTablaExpedientes() {
-        VBox panel = new VBox(10);
-        panel.setPadding(new Insets(10));
+        VBox panel = new VBox(12);
 
         HBox panelBusqueda = new HBox(10);
         panelBusqueda.setAlignment(Pos.CENTER_LEFT);
 
-        Label lblBuscar = new Label("🔍 Buscar:");
+        Label lblBuscar = new Label("Buscar:");
+        lblBuscar.getStyleClass().add("text-secondary");
         txtBuscar = new TextField();
         txtBuscar.setPromptText("Número, cliente...");
-        txtBuscar.setPrefWidth(200);
+        txtBuscar.getStyleClass().add("search-field");
         txtBuscar.textProperty().addListener((obs, old, val) -> buscarExpedientes());
 
         Label lblFiltro = new Label("Estado:");
+        lblFiltro.getStyleClass().add("text-secondary");
         cmbFiltroEstado = new ComboBox<>();
         cmbFiltroEstado.setItems(FXCollections.observableArrayList(EstadoExpediente.values()));
         cmbFiltroEstado.setPromptText("Todos");
         cmbFiltroEstado.setOnAction(e -> buscarExpedientes());
 
-        Button btnLimpiarFiltro = new Button("🔄 Limpiar");
+        Button btnLimpiarFiltro = new Button("Limpiar");
+        btnLimpiarFiltro.getStyleClass().add("btn-ghost");
         btnLimpiarFiltro.setOnAction(e -> {
             txtBuscar.clear();
             cmbFiltroEstado.setValue(null);
             cargarExpedientes();
         });
 
-        Button btnExportarExp = new Button("📊 Exportar Excel");
-        btnExportarExp.setStyle("-fx-background-color: #16a085; -fx-text-fill: white;");
+        Region spacerBusqueda = new Region();
+        HBox.setHgrow(spacerBusqueda, Priority.ALWAYS);
+
+        Button btnExportarExp = new Button("Exportar Excel");
+        btnExportarExp.getStyleClass().add("button-info");
         btnExportarExp.setOnAction(e -> exportarExpedientesExcel());
 
         panelBusqueda.getChildren().addAll(lblBuscar, txtBuscar, lblFiltro, cmbFiltroEstado,
-                btnLimpiarFiltro, btnExportarExp);
-
-        //panelBusqueda.getChildren().addAll(lblBuscar, txtBuscar, lblFiltro, cmbFiltroEstado, btnLimpiarFiltro);
+                btnLimpiarFiltro, spacerBusqueda, btnExportarExp);
 
         tablaExpedientes = new TableView<>();
         tablaExpedientes.setItems(listaExpedientes);
         tablaExpedientes.getStyleClass().add("table-view");
+        // Reparte el ancho entre las columnas (elimina el espacio vacío a la derecha)
+        tablaExpedientes.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<Expediente, String> colNumero = new TableColumn<>("Número");
         colNumero.setCellValueFactory(new PropertyValueFactory<>("numero"));
-        colNumero.setPrefWidth(120);
+        colNumero.setMaxWidth(1f * Integer.MAX_VALUE * 12); // peso 12%
 
         TableColumn<Expediente, String> colCaratula = new TableColumn<>("Carátula");
         colCaratula.setCellValueFactory(new PropertyValueFactory<>("caratula"));
-        colCaratula.setPrefWidth(300);
+        colCaratula.setMaxWidth(1f * Integer.MAX_VALUE * 38); // peso 38%
 
         TableColumn<Expediente, String> colCliente = new TableColumn<>("Cliente");
         colCliente.setCellValueFactory(new PropertyValueFactory<>("cliente"));
-        colCliente.setPrefWidth(150);
+        colCliente.setMaxWidth(1f * Integer.MAX_VALUE * 25); // peso 25%
 
         TableColumn<Expediente, EstadoExpediente> colEstado = new TableColumn<>("Estado");
         colEstado.setCellValueFactory(new PropertyValueFactory<>("estado"));
-        colEstado.setPrefWidth(100);
+        colEstado.setMaxWidth(1f * Integer.MAX_VALUE * 12); // peso 12%
+        // Renderiza el estado como pill de color
+        colEstado.setCellFactory(col -> new TableCell<Expediente, EstadoExpediente>() {
+            @Override
+            protected void updateItem(EstadoExpediente estado, boolean empty) {
+                super.updateItem(estado, empty);
+                if (empty || estado == null) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+                Label pill = new Label(estado.getDisplayName());
+                pill.getStyleClass().add("pill");
+                switch (estado) {
+                    case ACTIVO -> pill.getStyleClass().add("pill-green");
+                    case ARCHIVADO -> pill.getStyleClass().add("pill-blue");
+                    case SUSPENDIDO -> pill.getStyleClass().add("pill-amber");
+                    case FINALIZADO -> pill.getStyleClass().add("pill-red");
+                }
+                setGraphic(pill);
+                setText(null);
+            }
+        });
 
         TableColumn<Expediente, LocalDate> colFecha = new TableColumn<>("Fecha Inicio");
         colFecha.setCellValueFactory(new PropertyValueFactory<>("fechaInicio"));
-        colFecha.setPrefWidth(120);
+        colFecha.setMaxWidth(1f * Integer.MAX_VALUE * 13); // peso 13%
 
         tablaExpedientes.getColumns().addAll(colNumero, colCaratula, colCliente, colEstado, colFecha);
 
@@ -3054,7 +3160,6 @@ public class MainController {
                 }
         );
 
-        // Doble clic para abrir vista detallada
         tablaExpedientes.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2 && tablaExpedientes.getSelectionModel().getSelectedItem() != null) {
                 expedienteSeleccionado = tablaExpedientes.getSelectionModel().getSelectedItem();
@@ -3293,34 +3398,51 @@ public class MainController {
     // ==================== AGENDA ====================
 
     private VBox crearPanelAgenda() {
-        VBox panel = new VBox(15);
-        panel.setPadding(new Insets(15));
+        VBox panel = new VBox(16);
+        panel.setPadding(new Insets(24, 32, 24, 32));
 
-        Label titulo = new Label("📅 Agenda y Calendario");
-        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        // Header
+        HBox header = new HBox(10);
+        header.setAlignment(Pos.CENTER_LEFT);
 
-        // Botones superiores
-        HBox botonesSuperiores = new HBox(10);
-        botonesSuperiores.setAlignment(Pos.CENTER_LEFT);
+        VBox tituloBox = new VBox(2);
+        Label titulo = new Label("Agenda y Calendario");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+        Label subtitulo = new Label("Eventos, audiencias y vencimientos");
+        subtitulo.getStyleClass().add("text-secondary");
+        tituloBox.getChildren().addAll(titulo, subtitulo);
 
-        Button btnNuevoEvento = new Button("➕ Nuevo Evento");
-        btnNuevoEvento.getStyleClass().add("btn-primary");
+        Region spacerHeader = new Region();
+        HBox.setHgrow(spacerHeader, Priority.ALWAYS);
+
+        Button btnNuevoEvento = new Button("+  Nuevo Evento");
+        btnNuevoEvento.getStyleClass().add("btn-primary-lg");
         btnNuevoEvento.setOnAction(e -> abrirFormularioEvento(null));
 
-        Button btnActualizar = new Button("🔄 Actualizar");
+        header.getChildren().addAll(tituloBox, spacerHeader, btnNuevoEvento);
+
+        // Barra de filtros
+        HBox barraFiltros = new HBox(10);
+        barraFiltros.setAlignment(Pos.CENTER_LEFT);
+
+        Label lblVista = new Label("Vista:");
+        lblVista.getStyleClass().add("text-secondary");
+
+        cmbVistaAgenda = new ComboBox<>();
+        cmbVistaAgenda.setItems(FXCollections.observableArrayList("Todos", "Hoy", "Esta Semana", "Este Mes", "Pendientes"));
+        cmbVistaAgenda.setValue("Esta Semana");
+        cmbVistaAgenda.setOnAction(e -> filtrarEventosAgenda(cmbVistaAgenda.getValue()));
+
+        Button btnActualizar = new Button("Actualizar");
+        btnActualizar.getStyleClass().add("btn-ghost");
         btnActualizar.setOnAction(e -> cargarEventosAgenda());
 
-        ComboBox<String> cmbVista = new ComboBox<>();
-        cmbVista.setItems(FXCollections.observableArrayList("Todos", "Hoy", "Esta Semana", "Este Mes", "Pendientes"));
-        cmbVista.setValue("Esta Semana");
-        cmbVista.setOnAction(e -> filtrarEventosAgenda(cmbVista.getValue()));
+        barraFiltros.getChildren().addAll(lblVista, cmbVistaAgenda, btnActualizar);
 
-        botonesSuperiores.getChildren().addAll(btnNuevoEvento, btnActualizar, new Label("Vista:"), cmbVista);
+        // Tabla
+        tablaEventos = crearTablaEventos();
 
-        // Tabla de eventos
-        TableView<EventoAgenda> tablaEventos = crearTablaEventos();
-
-        panel.getChildren().addAll(titulo, botonesSuperiores, tablaEventos);
+        panel.getChildren().addAll(header, barraFiltros, tablaEventos);
         VBox.setVgrow(tablaEventos, Priority.ALWAYS);
 
         return panel;
@@ -3328,18 +3450,14 @@ public class MainController {
 
     private TableView<EventoAgenda> crearTablaEventos() {
         TableView<EventoAgenda> tabla = new TableView<>();
-        ObservableList<EventoAgenda> listaEventos = FXCollections.observableArrayList();
-        tabla.setItems(listaEventos);
+        tabla.setItems(listaEventos); // usa el campo de instancia, no una lista local
         tabla.getStyleClass().add("table-view");
+        tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Guardar referencia para poder actualizarla
-        tabla.setUserData(listaEventos);
-
+        // Fecha y hora
         TableColumn<EventoAgenda, LocalDateTime> colFechaHora = new TableColumn<>("Fecha y Hora");
         colFechaHora.setCellValueFactory(new PropertyValueFactory<>("fechaHora"));
-        colFechaHora.setPrefWidth(150);
-
-        // CELLFACTORY PARA FORMATEAR:
+        colFechaHora.setMaxWidth(1f * Integer.MAX_VALUE * 13);
         colFechaHora.setCellFactory(column -> new TableCell<EventoAgenda, LocalDateTime>() {
             @Override
             protected void updateItem(LocalDateTime item, boolean empty) {
@@ -3347,50 +3465,64 @@ public class MainController {
                 if (empty || item == null) {
                     setText(null);
                 } else {
-                    // Formato: 26-Ene 14:30
-                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MMM HH:mm",
-                            new java.util.Locale("es", "ES"));
-                    setText(item.format(formatter));
+                    setText(item.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
                 }
             }
         });
 
         TableColumn<EventoAgenda, String> colTitulo = new TableColumn<>("Título");
         colTitulo.setCellValueFactory(new PropertyValueFactory<>("titulo"));
-        colTitulo.setPrefWidth(250);
+        colTitulo.setMaxWidth(1f * Integer.MAX_VALUE * 22);
 
         TableColumn<EventoAgenda, TipoEvento> colTipo = new TableColumn<>("Tipo");
         colTipo.setCellValueFactory(new PropertyValueFactory<>("tipo"));
-        colTipo.setPrefWidth(120);
+        colTipo.setMaxWidth(1f * Integer.MAX_VALUE * 13);
 
         TableColumn<EventoAgenda, String> colUbicacion = new TableColumn<>("Ubicación");
         colUbicacion.setCellValueFactory(new PropertyValueFactory<>("ubicacion"));
-        colUbicacion.setPrefWidth(150);
+        colUbicacion.setMaxWidth(1f * Integer.MAX_VALUE * 15);
 
+        // Estado como pill
         TableColumn<EventoAgenda, EstadoEvento> colEstado = new TableColumn<>("Estado");
         colEstado.setCellValueFactory(new PropertyValueFactory<>("estado"));
-        colEstado.setPrefWidth(100);
+        colEstado.setMaxWidth(1f * Integer.MAX_VALUE * 12);
+        colEstado.setCellFactory(col -> new TableCell<EventoAgenda, EstadoEvento>() {
+            @Override
+            protected void updateItem(EstadoEvento estado, boolean empty) {
+                super.updateItem(estado, empty);
+                if (empty || estado == null) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+                Label pill = new Label(estado.getDisplayName());
+                pill.getStyleClass().add("pill");
+                switch (estado) {
+                    case PENDIENTE -> pill.getStyleClass().add("pill-amber");
+                    case COMPLETADO -> pill.getStyleClass().add("pill-green");
+                    case CANCELADO -> pill.getStyleClass().add("pill-red");
+                }
+                setGraphic(pill);
+                setText(null);
+            }
+        });
 
-        // Columna de acciones
+        // Acciones
         TableColumn<EventoAgenda, Void> colAcciones = new TableColumn<>("Acciones");
-        colAcciones.setPrefWidth(480);
+        colAcciones.setMaxWidth(1f * Integer.MAX_VALUE * 25);
         colAcciones.setCellFactory(param -> new TableCell<>() {
-            private final Button btnEditar = new Button("✏️ Editar");
-            private final Button btnCompletar = new Button("✅ Completar");
-            private final Button btnEliminar = new Button("🗑️ Eliminar");
+            private final Button btnEditar = new Button("Editar");
+            private final Button btnCompletar = new Button("Completar");
+            private final Button btnEliminar = new Button("Eliminar");
 
             {
-
-                btnEditar.setMinWidth(85);
-                btnCompletar.setMinWidth(110);
-                btnEliminar.setMinWidth(85);
-
+                btnEditar.getStyleClass().add("btn-ghost");
                 btnEditar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
                     abrirFormularioEvento(evento);
                 });
-                //nuevo estilo botones
-                btnCompletar.getStyleClass().addAll("button", "button-success");
+
+                btnCompletar.getStyleClass().add("button-success");
                 btnCompletar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
                     try {
@@ -3406,19 +3538,21 @@ public class MainController {
                 btnEliminar.setOnAction(e -> {
                     EventoAgenda evento = getTableView().getItems().get(getIndex());
 
+                    String fecha = evento.getFechaHora() != null
+                            ? evento.getFechaHora().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                            : "—";
+
                     StringBuilder mensaje = new StringBuilder();
                     mensaje.append("¿Eliminar el evento?\n\n");
-                    mensaje.append("📅 ").append(evento.getTitulo()).append("\n");
-                    mensaje.append("⏰ ").append(evento.getFechaHora().format(
-                            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))).append("\n");
-                    mensaje.append("📍 Tipo: ").append(evento.getTipo().getDisplayName()).append("\n");
+                    mensaje.append("Título: ").append(evento.getTitulo()).append("\n");
+                    mensaje.append("Fecha: ").append(fecha).append("\n");
+                    mensaje.append("Tipo: ").append(evento.getTipo().getDisplayName()).append("\n");
 
                     if (evento.getUbicacion() != null && !evento.getUbicacion().isEmpty()) {
-                        mensaje.append("📍 Ubicación: ").append(evento.getUbicacion()).append("\n");
+                        mensaje.append("Ubicación: ").append(evento.getUbicacion()).append("\n");
                     }
-
                     if (evento.getExpedienteId() != null) {
-                        mensaje.append("\n⚠️ Este evento está asociado a un expediente");
+                        mensaje.append("\nEste evento está asociado a un expediente.");
                     }
 
                     Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
@@ -3431,7 +3565,6 @@ public class MainController {
                             agendaService.eliminarEvento(evento.getId());
                             mostrarInfo("Evento eliminado");
                             cargarEventosAgenda();
-                            actualizarNotificaciones();
                         } catch (SQLException ex) {
                             mostrarError("Error: " + ex.getMessage());
                         }
@@ -3445,7 +3578,8 @@ public class MainController {
                 if (empty) {
                     setGraphic(null);
                 } else {
-                    HBox botones = new HBox(5, btnEditar, btnCompletar, btnEliminar);
+                    HBox botones = new HBox(6, btnEditar, btnCompletar, btnEliminar);
+                    botones.setAlignment(Pos.CENTER_LEFT);
                     setGraphic(botones);
                 }
             }
@@ -3453,11 +3587,10 @@ public class MainController {
 
         tabla.getColumns().addAll(colFechaHora, colTitulo, colTipo, colUbicacion, colEstado, colAcciones);
 
-        // Cargar eventos
+        // Carga inicial respetando la vista por defecto ("Esta Semana")
         try {
             Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
-            List<EventoAgenda> eventos = agendaService.listarEstaSemana(usuarioId);
-            listaEventos.addAll(eventos);
+            listaEventos.setAll(agendaService.listarEstaSemana(usuarioId));
         } catch (SQLException e) {
             mostrarError("Error al cargar eventos: " + e.getMessage());
         }
@@ -3465,95 +3598,84 @@ public class MainController {
         return tabla;
     }
 
-    @SuppressWarnings("unchecked")
     private void cargarEventosAgenda() {
-        // Buscar la tabla en el panel de agenda
-        TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
-        if (tabPane != null) {
-            Tab tabAgenda = tabPane.getTabs().stream()
-                    .filter(t -> t.getText().contains("Agenda"))
-                    .findFirst()
-                    .orElse(null);
+        // Recarga respetando la vista seleccionada actual
+        String vista = (cmbVistaAgenda != null && cmbVistaAgenda.getValue() != null)
+                ? cmbVistaAgenda.getValue() : "Esta Semana";
+        filtrarEventosAgenda(vista);
 
-            if (tabAgenda != null) {
-                VBox contenido = (VBox) tabAgenda.getContent();
-                TableView<EventoAgenda> tabla = (TableView<EventoAgenda>) contenido.lookup("TableView");
-                if (tabla != null) {
-                    ObservableList<EventoAgenda> lista = (ObservableList<EventoAgenda>) tabla.getUserData();
-                    try {
-                        Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
-                        List<EventoAgenda> eventos = agendaService.listarEstaSemana(usuarioId);
-                        lista.clear();
-                        lista.addAll(eventos);
-                    } catch (SQLException e) {
-                        mostrarError("Error al cargar eventos: " + e.getMessage());
-                    }
-                }
-            }
-        }
-
-        cargarDashboard(); // Actualizar también el dashboard
+        cargarDashboard();
         actualizarNotificaciones();
     }
 
-    @SuppressWarnings("unchecked")
     private void filtrarEventosAgenda(String filtro) {
-        TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
-        if (tabPane != null) {
-            Tab tabAgenda = tabPane.getTabs().stream()
-                    .filter(t -> t.getText().contains("Agenda"))
-                    .findFirst()
-                    .orElse(null);
-
-            if (tabAgenda != null) {
-                VBox contenido = (VBox) tabAgenda.getContent();
-                TableView<EventoAgenda> tabla = (TableView<EventoAgenda>) contenido.lookup("TableView");
-                if (tabla != null) {
-                    ObservableList<EventoAgenda> lista = (ObservableList<EventoAgenda>) tabla.getUserData();
-                    try {
-                        Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
-                        List<EventoAgenda> eventos = switch (filtro) {
-                            case "Hoy" -> agendaService.listarHoy(usuarioId);
-                            case "Esta Semana" -> agendaService.listarEstaSemana(usuarioId);
-                            case "Este Mes" -> agendaService.listarEsteMes(usuarioId);
-                            case "Pendientes" -> agendaService.listarPendientes(usuarioId);
-                            default -> agendaService.listarPorUsuario(usuarioId);
-                        };
-                        lista.clear();
-                        lista.addAll(eventos);
-                    } catch (SQLException e) {
-                        mostrarError("Error al filtrar eventos: " + e.getMessage());
-                    }
-                }
-            }
+        if (tablaEventos == null) return;
+        try {
+            Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
+            List<EventoAgenda> eventos = switch (filtro) {
+                case "Hoy" -> agendaService.listarHoy(usuarioId);
+                case "Esta Semana" -> agendaService.listarEstaSemana(usuarioId);
+                case "Este Mes" -> agendaService.listarEsteMes(usuarioId);
+                case "Pendientes" -> agendaService.listarPendientes(usuarioId);
+                default -> agendaService.listarPorUsuario(usuarioId);
+            };
+            listaEventos.setAll(eventos);
+        } catch (SQLException e) {
+            mostrarError("Error al filtrar eventos: " + e.getMessage());
         }
     }
+
+
 
     private void abrirFormularioEvento(EventoAgenda evento) {
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
         ventana.setTitle(evento == null ? "Nuevo Evento" : "Editar Evento");
 
-        VBox form = new VBox(10);
-        form.setPadding(new Insets(20));
+        VBox form = new VBox(14);
+        form.setPadding(new Insets(24));
 
+        // Encabezado
+        Label tituloVentana = new Label(evento == null ? "Nuevo Evento" : "Editar Evento");
+        tituloVentana.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+
+        // Campos
         TextField txtTitulo = new TextField();
+        txtTitulo.setPromptText("Ej: Audiencia preliminar");
+
         TextArea txtDescripcion = new TextArea();
         txtDescripcion.setPrefRowCount(3);
 
         DatePicker dpFecha = new DatePicker(LocalDate.now());
+        dpFecha.setMaxWidth(Double.MAX_VALUE);
 
-        Spinner<Integer> spHora = new Spinner<>(0, 23, 9);
-        Spinner<Integer> spMinuto = new Spinner<>(0, 59, 0, 15);
-        HBox horaBox = new HBox(5, new Label("Hora:"), spHora, new Label(":"), spMinuto);
+        // Combo de horarios cada 30 min
+        ComboBox<LocalTime> cmbHora = new ComboBox<>();
+        ObservableList<LocalTime> horarios = FXCollections.observableArrayList();
+        for (int h = 0; h < 24; h++) {
+            horarios.add(LocalTime.of(h, 0));
+            horarios.add(LocalTime.of(h, 30));
+        }
+        cmbHora.setItems(horarios);
+        cmbHora.setMaxWidth(Double.MAX_VALUE);
+        DateTimeFormatter hhmm = DateTimeFormatter.ofPattern("HH:mm");
+        // Mostrar como "HH:mm"
+        cmbHora.setConverter(new javafx.util.StringConverter<LocalTime>() {
+            @Override public String toString(LocalTime t) { return t != null ? t.format(hhmm) : ""; }
+            @Override public LocalTime fromString(String s) { return (s == null || s.isBlank()) ? null : LocalTime.parse(s, hhmm); }
+        });
+        cmbHora.setValue(LocalTime.of(9, 0));
 
         Spinner<Integer> spDuracion = new Spinner<>(15, 480, 60, 15);
+        spDuracion.setEditable(true);
+        spDuracion.setMaxWidth(Double.MAX_VALUE);
 
         ComboBox<TipoEvento> cmbTipo = new ComboBox<>();
         cmbTipo.setItems(FXCollections.observableArrayList(TipoEvento.values()));
         cmbTipo.setMaxWidth(Double.MAX_VALUE);
 
         TextField txtUbicacion = new TextField();
+        txtUbicacion.setPromptText("Ej: Juzgado Civil N° 3");
 
         ComboBox<RecordatorioOpcion> cmbRecordatorio = new ComboBox<>();
         cmbRecordatorio.setItems(FXCollections.observableArrayList(
@@ -3564,23 +3686,10 @@ public class MainController {
                 new RecordatorioOpcion(1440, "1 día antes"),
                 new RecordatorioOpcion(2880, "2 días antes")
         ));
-        cmbRecordatorio.setPromptText("Seleccione recordatorio");
         cmbRecordatorio.setMaxWidth(Double.MAX_VALUE);
 
-        if (evento != null) {
-            // Buscar y seleccionar el recordatorio actual
-            Integer minutosEvento = evento.getRecordatorioMinutos();
-            cmbRecordatorio.getItems().stream()
-                    .filter(r -> r.getMinutos().equals(minutosEvento))
-                    .findFirst()
-                    .ifPresent(cmbRecordatorio::setValue);
-        } else {
-            cmbRecordatorio.setValue(cmbRecordatorio.getItems().get(4)); // 1 día por defecto
-        }
-
-        // Selector de expediente (opcional)
         ComboBox<String> cmbExpediente = new ComboBox<>();
-        cmbExpediente.setPromptText("Sin expediente asociado");
+        cmbExpediente.setMaxWidth(Double.MAX_VALUE);
         try {
             List<Expediente> expedientes = expedienteService.listarActivos();
             ObservableList<String> items = FXCollections.observableArrayList();
@@ -3594,61 +3703,69 @@ public class MainController {
             e.printStackTrace();
         }
 
+        // Cargar datos (modo edición)
         if (evento != null) {
             txtTitulo.setText(evento.getTitulo());
             txtDescripcion.setText(evento.getDescripcion());
             dpFecha.setValue(evento.getFechaHora().toLocalDate());
-            spHora.getValueFactory().setValue(evento.getFechaHora().getHour());
-            spMinuto.getValueFactory().setValue(evento.getFechaHora().getMinute());
+            // Selecciona la opción de hora más cercana entre las del combo
+            LocalTime horaEvento = evento.getFechaHora().toLocalTime();
+            cmbHora.setValue(LocalTime.of(horaEvento.getHour(), horaEvento.getMinute() < 30 ? 0 : 30));
             spDuracion.getValueFactory().setValue(evento.getDuracionMinutos());
             cmbTipo.setValue(evento.getTipo());
             txtUbicacion.setText(evento.getUbicacion());
-            cmbRecordatorio.setValue(cmbRecordatorio.getValue());
+            Integer minutosEvento = evento.getRecordatorioMinutos();
+            cmbRecordatorio.getItems().stream()
+                    .filter(r -> r.getMinutos().equals(minutosEvento))
+                    .findFirst()
+                    .ifPresent(cmbRecordatorio::setValue);
         } else {
-            cmbRecordatorio.setValue(cmbRecordatorio.getValue());
+            cmbRecordatorio.setValue(cmbRecordatorio.getItems().get(4)); // 1 día por defecto
         }
 
+        // Fila hora + duración (lado a lado)
+        VBox boxHora = campoConLabel("Hora *", cmbHora);
+        VBox boxDuracion = campoConLabel("Duración (min)", spDuracion);
+        HBox.setHgrow(boxHora, Priority.ALWAYS);
+        HBox.setHgrow(boxDuracion, Priority.ALWAYS);
+        HBox filaHora = new HBox(12, boxHora, boxDuracion);
+
         form.getChildren().addAll(
-                new Label("Título *:"), txtTitulo,
-                new Label("Descripción:"), txtDescripcion,
-                new Label("Fecha *:"), dpFecha,
-                horaBox,
-                new Label("Duración (minutos):"), spDuracion,
-                new Label("Tipo *:"), cmbTipo,
-                new Label("Ubicación:"), txtUbicacion,
-                new Label("Recordatorio:"), cmbRecordatorio,
-                new Label("Expediente asociado:"), cmbExpediente
+                tituloVentana,
+                new Separator(),
+                campoConLabel("Título *", txtTitulo),
+                campoConLabel("Descripción", txtDescripcion),
+                campoConLabel("Fecha *", dpFecha),
+                filaHora,
+                campoConLabel("Tipo *", cmbTipo),
+                campoConLabel("Ubicación", txtUbicacion),
+                campoConLabel("Recordatorio", cmbRecordatorio),
+                campoConLabel("Expediente asociado", cmbExpediente)
         );
 
+        // Botones
         HBox botones = new HBox(10);
-        botones.setAlignment(Pos.CENTER);
+        botones.setAlignment(Pos.CENTER_RIGHT);
         botones.setPadding(new Insets(10, 0, 0, 0));
 
-        Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.getStyleClass().addAll("button", "button-success");
+        Button btnGuardar = new Button("Guardar");
+        btnGuardar.getStyleClass().add("btn-primary");
         btnGuardar.setOnAction(e -> {
             try {
                 EventoAgenda ev = evento != null ? evento : new EventoAgenda();
                 ev.setTitulo(txtTitulo.getText());
                 ev.setDescripcion(txtDescripcion.getText());
 
-                // CORRECCIÓN: Crear LocalTime primero
                 LocalDate fecha = dpFecha.getValue();
-                LocalTime hora = LocalTime.of(spHora.getValue(), spMinuto.getValue());
-                LocalDateTime fechaHora = LocalDateTime.of(fecha, hora);
-
-                ev.setFechaHora(fechaHora);
+                LocalTime hora = cmbHora.getValue() != null ? cmbHora.getValue() : LocalTime.of(9, 0);
+                ev.setFechaHora(LocalDateTime.of(fecha, hora));
                 ev.setDuracionMinutos(spDuracion.getValue());
                 ev.setTipo(cmbTipo.getValue());
                 ev.setUbicacion(txtUbicacion.getText());
-                RecordatorioOpcion recordatorio = cmbRecordatorio.getValue();
-                if (recordatorio != null) {
-                    ev.setRecordatorioMinutos(recordatorio.getMinutos());
-                } else {
-                    ev.setRecordatorioMinutos(1440); // 1 día por defecto
-                }
 
-                // Expediente asociado
+                RecordatorioOpcion recordatorio = cmbRecordatorio.getValue();
+                ev.setRecordatorioMinutos(recordatorio != null ? recordatorio.getMinutos() : 1440);
+
                 String expSeleccionado = cmbExpediente.getValue();
                 if (expSeleccionado != null && !expSeleccionado.equals("Sin expediente")) {
                     Integer expId = Integer.parseInt(expSeleccionado.split(" - ")[0]);
@@ -3675,18 +3792,30 @@ public class MainController {
             }
         });
 
-        Button btnCancelar = new Button("❌ Cancelar");
+        Button btnCancelar = new Button("Cancelar");
+        btnCancelar.getStyleClass().add("btn-ghost");
         btnCancelar.setOnAction(e -> ventana.close());
 
-        botones.getChildren().addAll(btnGuardar, btnCancelar);
+        botones.getChildren().addAll(btnCancelar, btnGuardar);
         form.getChildren().add(botones);
 
         ScrollPane scroll = new ScrollPane(form);
         scroll.setFitToWidth(true);
+        scroll.getStyleClass().add("scroll-pane");
 
-        Scene scene = new Scene(scroll, 550, 650);
+        Scene scene = new Scene(scroll, 480, 640);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.showAndWait();
+    }
+
+    // Agrupa una etiqueta y su control con el estilo de la app
+    private VBox campoConLabel(String etiqueta, javafx.scene.Node control) {
+        VBox box = new VBox(4);
+        Label lbl = new Label(etiqueta);
+        lbl.getStyleClass().add("field-label");
+        box.getChildren().addAll(lbl, control);
+        return box;
     }
 
 // ==================== OPERACIONES CRUD EXPEDIENTES ====================
@@ -3997,59 +4126,74 @@ public class MainController {
     // ==================== PANEL DE CLIENTES (VERSIÓN SIMPLE) ====================
 
     private VBox crearPanelClientes() {
-        VBox panel = new VBox(15);
-        panel.setPadding(new Insets(15));
+        VBox panel = new VBox(16);
+        panel.setPadding(new Insets(24, 32, 24, 32));
 
-        Label titulo = new Label("👥 Gestión de Clientes");
-        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        // Header con título y botón
+        HBox header = new HBox(10);
+        header.setAlignment(Pos.CENTER_LEFT);
 
-        // Barra superior
+        VBox tituloBox = new VBox(2);
+        Label titulo = new Label("Gestión de Clientes");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+        Label subtitulo = new Label("Cartera de clientes del estudio");
+        subtitulo.getStyleClass().add("text-secondary");
+        tituloBox.getChildren().addAll(titulo, subtitulo);
+
+        Region spacerHeader = new Region();
+        HBox.setHgrow(spacerHeader, Priority.ALWAYS);
+
+        Button btnNuevoCliente = new Button("+  Nuevo Cliente");
+        btnNuevoCliente.getStyleClass().add("btn-primary-lg");
+        btnNuevoCliente.setOnAction(e -> abrirFormularioCliente(null));
+
+        header.getChildren().addAll(tituloBox, spacerHeader, btnNuevoCliente);
+
+        // Barra de búsqueda
         HBox barraControl = new HBox(10);
         barraControl.setAlignment(Pos.CENTER_LEFT);
 
-        Label lblBuscar = new Label("🔍 Buscar:");
+        Label lblBuscar = new Label("Buscar:");
+        lblBuscar.getStyleClass().add("text-secondary");
         txtBuscarCliente = new TextField();
         txtBuscarCliente.setPromptText("Nombre, DNI, email...");
-        txtBuscarCliente.setPrefWidth(250);
+        txtBuscarCliente.getStyleClass().add("search-field");
         txtBuscarCliente.textProperty().addListener((obs, old, val) -> buscarClientes());
 
-        Button btnNuevoCliente = new Button("➕ Nuevo Cliente");
-        btnNuevoCliente.getStyleClass().add("btn-primary");;
-        btnNuevoCliente.setOnAction(e -> abrirFormularioCliente(null));
-
-        Button btnActualizar = new Button("🔄 Actualizar");
+        Button btnActualizar = new Button("Actualizar");
+        btnActualizar.getStyleClass().add("btn-ghost");
         btnActualizar.setOnAction(e -> cargarClientes());
 
-        Button btnExportar = new Button("📊 Exportar Excel");
-        btnExportar.setStyle("-fx-background-color: #16a085; -fx-text-fill: white;");
+        Region spacerBusqueda = new Region();
+        HBox.setHgrow(spacerBusqueda, Priority.ALWAYS);
+
+        Button btnExportar = new Button("Exportar Excel");
+        btnExportar.getStyleClass().add("button-info");
         btnExportar.setOnAction(e -> exportarClientesExcel());
 
-// Agregar a barraControl
-        barraControl.getChildren().addAll(lblBuscar, txtBuscarCliente, btnNuevoCliente,
-                btnActualizar, btnExportar);
-
-        //barraControl.getChildren().addAll(lblBuscar, txtBuscarCliente, btnNuevoCliente, btnActualizar);
+        barraControl.getChildren().addAll(lblBuscar, txtBuscarCliente, btnActualizar, spacerBusqueda, btnExportar);
 
         // Tabla de clientes
         tablaClientes = new TableView<>();
         tablaClientes.setItems(listaClientes);
         tablaClientes.getStyleClass().add("table-view");
+        tablaClientes.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<Cliente, String> colNombre = new TableColumn<>("Nombre Completo");
         colNombre.setCellValueFactory(new PropertyValueFactory<>("nombreCompleto"));
-        colNombre.setPrefWidth(250);
+        colNombre.setMaxWidth(1f * Integer.MAX_VALUE * 32);
 
         TableColumn<Cliente, String> colDni = new TableColumn<>("DNI");
         colDni.setCellValueFactory(new PropertyValueFactory<>("dni"));
-        colDni.setPrefWidth(100);
+        colDni.setMaxWidth(1f * Integer.MAX_VALUE * 18);
 
         TableColumn<Cliente, String> colTelefono = new TableColumn<>("Teléfono");
         colTelefono.setCellValueFactory(new PropertyValueFactory<>("telefono"));
-        colTelefono.setPrefWidth(120);
+        colTelefono.setMaxWidth(1f * Integer.MAX_VALUE * 20);
 
         TableColumn<Cliente, String> colEmail = new TableColumn<>("Email");
         colEmail.setCellValueFactory(new PropertyValueFactory<>("email"));
-        colEmail.setPrefWidth(200);
+        colEmail.setMaxWidth(1f * Integer.MAX_VALUE * 30);
 
         tablaClientes.getColumns().addAll(colNombre, colDni, colTelefono, colEmail);
 
@@ -4060,10 +4204,9 @@ public class MainController {
             }
         });
 
-        panel.getChildren().addAll(titulo, barraControl, tablaClientes);
+        panel.getChildren().addAll(header, barraControl, tablaClientes);
         VBox.setVgrow(tablaClientes, Priority.ALWAYS);
 
-        // Cargar clientes
         cargarClientes();
 
         return panel;
@@ -4220,74 +4363,56 @@ public class MainController {
             chkActivo.setSelected(cliente.isActivo());
         }
 
-
         // Layout del formulario en dos columnas
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
 
         int row = 0;
-
-        // Columna izquierda
         grid.add(new Label("Nombre Completo *:"), 0, row);
         grid.add(txtNombre, 1, row++);
-
         grid.add(new Label("DNI:"), 0, row);
         grid.add(txtDni, 1, row++);
-
         grid.add(new Label("CUIT/CUIL:"), 0, row);
         grid.add(txtCuit, 1, row++);
-
         grid.add(new Label("Fecha Nacimiento:"), 0, row);
         grid.add(dpFechaNac, 1, row++);
-
         grid.add(new Label("Teléfono:"), 0, row);
         grid.add(txtTelefono, 1, row++);
-
         grid.add(new Label("Email:"), 0, row);
         grid.add(txtEmail, 1, row++);
-
         grid.add(new Label("Domicilio:"), 0, row);
         grid.add(txtDomicilio, 1, row++);
-
         grid.add(new Label("Localidad:"), 0, row);
         grid.add(txtLocalidad, 1, row++);
-
         grid.add(new Label("Provincia:"), 0, row);
         grid.add(cmbProvincia, 1, row++);
-
         grid.add(new Label("Código Postal:"), 0, row);
         grid.add(txtCP, 1, row++);
-
         grid.add(new Label("Profesión:"), 0, row);
         grid.add(txtProfesion, 1, row++);
-
         grid.add(new Label("Estado Civil:"), 0, row);
         grid.add(cmbEstadoCivil, 1, row++);
-
         grid.add(new Label("Observaciones:"), 0, row);
         grid.add(txtObservaciones, 1, row++);
-
         grid.add(chkActivo, 1, row++);
 
-        // Hacer que las columnas se expandan
         ColumnConstraints col1 = new ColumnConstraints();
         col1.setMinWidth(120);
         ColumnConstraints col2 = new ColumnConstraints();
         col2.setHgrow(Priority.ALWAYS);
         grid.getColumnConstraints().addAll(col1, col2);
 
-        // Botones
+        // Botones principales
         HBox botones = new HBox(10);
         botones.setAlignment(Pos.CENTER);
         botones.setPadding(new Insets(15, 0, 0, 0));
 
-        Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.getStyleClass().addAll("button", "button-success");
+        Button btnGuardar = new Button("Guardar");
+        btnGuardar.getStyleClass().add("btn-primary");
         btnGuardar.setOnAction(e -> {
             try {
                 Cliente cli = cliente != null ? cliente : new Cliente();
-
                 cli.setNombreCompleto(txtNombre.getText());
                 cli.setDni(txtDni.getText());
                 cli.setCuitCuil(txtCuit.getText());
@@ -4322,19 +4447,101 @@ public class MainController {
             }
         });
 
-        Button btnCancelar = new Button("❌ Cancelar");
+        Button btnCancelar = new Button("Cancelar");
+        btnCancelar.getStyleClass().add("btn-ghost");
         btnCancelar.setOnAction(e -> ventana.close());
 
         botones.getChildren().addAll(btnGuardar, btnCancelar);
 
         form.getChildren().addAll(grid, botones);
 
+        // Zona de eliminar (solo en edición), separada y discreta al final
+        if (cliente != null) {
+            Separator sep = new Separator();
+            sep.setPadding(new Insets(10, 0, 10, 0));
+
+            VBox zonaPeligro = new VBox(6);
+            Label lblZona = new Label("Zona de riesgo");
+            lblZona.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #791F1F;");
+
+            Button btnEliminar = new Button("Eliminar Cliente");
+            btnEliminar.getStyleClass().add("btn-danger");
+            btnEliminar.setOnAction(a -> eliminarClienteConValidacion(cliente, ventana));
+
+            zonaPeligro.getChildren().addAll(lblZona, btnEliminar);
+            form.getChildren().addAll(sep, zonaPeligro);
+        }
+
         ScrollPane scroll = new ScrollPane(form);
         scroll.setFitToWidth(true);
 
-        Scene scene = new Scene(scroll, 600, 700);
+        Scene scene = new Scene(scroll, 600, 720);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.showAndWait();
+    }
+
+    private void eliminarClienteConValidacion(Cliente cliente, Stage ventanaFormulario) {
+        try {
+            ExpedienteDAO expedienteDAO = new ExpedienteDAO();
+            List<Expediente> expedientes = expedienteDAO.listarPorClienteId(cliente.getId());
+            int cantDocumentos = documentoClienteService.listarPorCliente(cliente.getId()).size();
+
+            StringBuilder mensaje = new StringBuilder();
+            mensaje.append("¿Está seguro de eliminar el cliente: ").append(cliente.getNombreCompleto()).append("?\n\n");
+
+            boolean tieneAsociaciones = false;
+
+            if (!expedientes.isEmpty()) {
+                mensaje.append("ATENCIÓN: Este cliente tiene ").append(expedientes.size())
+                        .append(" expediente(s) asociado(s):\n");
+                for (Expediente exp : expedientes) {
+                    mensaje.append("   - ").append(exp.getNumero()).append(" - ").append(exp.getCaratula()).append("\n");
+                }
+                mensaje.append("\n");
+                tieneAsociaciones = true;
+            }
+
+            if (cantDocumentos > 0) {
+                mensaje.append("Este cliente tiene ").append(cantDocumentos).append(" documento(s) cargado(s).\n\n");
+                tieneAsociaciones = true;
+            }
+
+            if (tieneAsociaciones) {
+                mensaje.append("No se puede eliminar.\n");
+                mensaje.append("Primero debe eliminar o reasignar los expedientes y documentos asociados.");
+
+                Alert alerta = new Alert(Alert.AlertType.ERROR);
+                alerta.setTitle("No se puede eliminar");
+                alerta.setHeaderText("Cliente con datos asociados");
+                alerta.setContentText(mensaje.toString());
+                alerta.showAndWait();
+                return;
+            }
+
+            mensaje.append("Esta acción no se puede deshacer.");
+
+            Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmacion.setTitle("Confirmar eliminación");
+            confirmacion.setHeaderText("Eliminar cliente");
+            confirmacion.setContentText(mensaje.toString());
+
+            if (confirmacion.showAndWait().get() == ButtonType.OK) {
+                clienteService.eliminarCliente(cliente.getId());
+                mostrarInfo("Cliente eliminado correctamente");
+                ventanaFormulario.close();
+                cargarClientes();
+            }
+
+        } catch (IllegalStateException ex) {
+            Alert alerta = new Alert(Alert.AlertType.ERROR);
+            alerta.setTitle("No se puede eliminar");
+            alerta.setHeaderText("Validación fallida");
+            alerta.setContentText(ex.getMessage());
+            alerta.showAndWait();
+        } catch (SQLException ex) {
+            mostrarError("Error al eliminar cliente: " + ex.getMessage());
+        }
     }
     // ==================== VISTA DETALLADA DEL CLIENTE ====================
 
@@ -4344,157 +4551,86 @@ public class MainController {
         ventana.setTitle("Cliente: " + cliente.getNombreCompleto());
         ventana.setMaximized(true);
 
-
         BorderPane root = new BorderPane();
-        root.setPadding(new Insets(15));
 
-        // ========== TOP: Header con datos básicos del cliente ==========
-        VBox header = new VBox(10);
-        header.setPadding(new Insets(15));
-        //header.setStyle("-fx-background-color: #3498db; -fx-background-radius: 5;");
-        header.setStyle("-fx-background-color: linear-gradient(to right, #3498db, #2980b9); " +
-                "-fx-background-radius: 5;");
+        // ========== TOP: Header con datos básicos ==========
+        VBox header = new VBox(12);
+        header.setPadding(new Insets(20, 24, 20, 24));
+        header.setStyle("-fx-background-color: #0C447C;");
 
-        // Grid con información visible
-        GridPane infoGrid = new GridPane();
-        infoGrid.setHgap(30);
-        infoGrid.setVgap(5);
+        // Línea 1: nombre + estado (pill)
+        HBox lineaNombre = new HBox(12);
+        lineaNombre.setAlignment(Pos.CENTER_LEFT);
 
         Label lblNombre = new Label(cliente.getNombreCompleto());
-        lblNombre.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: white;");
+        lblNombre.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: white;");
 
-        HBox infoDatos = new HBox(30);
+        Label lblEstado = new Label(cliente.isActivo() ? "ACTIVO" : "INACTIVO");
+        lblEstado.getStyleClass().add("pill");
+        lblEstado.getStyleClass().add(cliente.isActivo() ? "pill-green" : "pill-red");
+
+        lineaNombre.getChildren().addAll(lblNombre, lblEstado);
+
+        // Línea 2: datos de contacto
+        HBox infoDatos = new HBox(28);
         infoDatos.setAlignment(Pos.CENTER_LEFT);
 
-        Label lblDni = new Label("📋 DNI: " + (cliente.getDni() != null ? cliente.getDni() : "N/A"));
-        lblDni.setStyle("-fx-text-fill: white; -fx-font-size: 14px;");
+        Label lblDni = new Label("DNI: " + (cliente.getDni() != null ? cliente.getDni() : "—"));
+        lblDni.setStyle("-fx-text-fill: #B5D4F4; -fx-font-size: 14px;");
 
-        Label lblTelefono = new Label("📞 Tel: " + (cliente.getTelefono() != null ? cliente.getTelefono() : "N/A"));
-        lblTelefono.setStyle("-fx-text-fill: white; -fx-font-size: 14px;");
+        Label lblTelefono = new Label("Tel: " + (cliente.getTelefono() != null ? cliente.getTelefono() : "—"));
+        lblTelefono.setStyle("-fx-text-fill: #B5D4F4; -fx-font-size: 14px;");
 
-        Label lblEmail = new Label("✉️ Email: " + (cliente.getEmail() != null ? cliente.getEmail() : "N/A"));
-        lblEmail.setStyle("-fx-text-fill: white; -fx-font-size: 14px;");
+        Label lblEmail = new Label("Email: " + (cliente.getEmail() != null ? cliente.getEmail() : "—"));
+        lblEmail.setStyle("-fx-text-fill: #B5D4F4; -fx-font-size: 14px;");
 
-        Label lblEstado = new Label(cliente.isActivo() ? "✅ ACTIVO" : "❌ INACTIVO");
-        lblEstado.setStyle("-fx-text-fill: " + (cliente.isActivo() ? "#2ecc71" : "#e74c3c") + "; -fx-font-size: 14px; -fx-font-weight: bold;");
+        infoDatos.getChildren().addAll(lblDni, lblTelefono, lblEmail);
 
-        infoDatos.getChildren().addAll(lblDni, lblTelefono, lblEmail, lblEstado);
-        Button btnEliminarCliente = new Button("🗑️ Eliminar Cliente");
-        btnEliminarCliente.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
-        btnEliminarCliente.setOnAction(a -> {
-            try {
-                // Verificar expedientes y documentos ANTES de confirmar
-                ExpedienteDAO expedienteDAO = new ExpedienteDAO();
-                List<Expediente> expedientes = expedienteDAO.listarPorClienteId(cliente.getId());
-
-                int cantDocumentos = documentoClienteService.listarPorCliente(cliente.getId()).size();
-
-                // Construir mensaje de confirmación con detalles
-                StringBuilder mensaje = new StringBuilder();
-                mensaje.append("¿Está seguro de eliminar el cliente: ").append(cliente.getNombreCompleto()).append("?\n\n");
-
-                boolean tieneAsociaciones = false;
-
-                if (!expedientes.isEmpty()) {
-                    mensaje.append("⚠️ ATENCIÓN: Este cliente tiene ").append(expedientes.size())
-                            .append(" expediente(s) asociado(s):\n");
-                    for (Expediente exp : expedientes) {
-                        mensaje.append("   • ").append(exp.getNumero()).append(" - ").append(exp.getCaratula()).append("\n");
-                    }
-                    mensaje.append("\n");
-                    tieneAsociaciones = true;
-                }
-
-                if (cantDocumentos > 0) {
-                    mensaje.append("📎 Este cliente tiene ").append(cantDocumentos).append(" documento(s) cargado(s).\n\n");
-                    tieneAsociaciones = true;
-                }
-
-                if (tieneAsociaciones) {
-                    mensaje.append("❌ NO SE PUEDE ELIMINAR.\n");
-                    mensaje.append("Primero debe eliminar o reasignar los expedientes y documentos asociados.");
-
-                    Alert alerta = new Alert(Alert.AlertType.ERROR);
-                    alerta.setTitle("No se puede eliminar");
-                    alerta.setHeaderText("Cliente con datos asociados");
-                    alerta.setContentText(mensaje.toString());
-                    alerta.showAndWait();
-                    return;
-                }
-
-                // Si no tiene asociaciones, pedir confirmación normal
-                mensaje.append("Esta acción no se puede deshacer.");
-
-                Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
-                confirmacion.setTitle("Confirmar eliminación");
-                confirmacion.setHeaderText("Eliminar cliente");
-                confirmacion.setContentText(mensaje.toString());
-
-                if (confirmacion.showAndWait().get() == ButtonType.OK) {
-                    clienteService.eliminarCliente(cliente.getId());
-                    mostrarInfo("Cliente eliminado correctamente");
-                    ventana.close();
-                    cargarClientes();
-                }
-
-            } catch (IllegalStateException ex) {
-                // Error de validación de negocio
-                Alert alerta = new Alert(Alert.AlertType.ERROR);
-                alerta.setTitle("No se puede eliminar");
-                alerta.setHeaderText("Validación fallida");
-                alerta.setContentText(ex.getMessage());
-                alerta.showAndWait();
-            } catch (SQLException ex) {
-                mostrarError("Error al eliminar cliente: " + ex.getMessage());
-            }
-
-        });
-
-
-        Button btnEditar = new Button("✏️ Editar Cliente");
-        btnEditar.setStyle("-fx-background-color: white; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+        // Línea 3: botón editar
+        Button btnEditar = new Button("Editar Cliente");
+        btnEditar.setStyle("-fx-background-color: white; -fx-text-fill: #0C447C; -fx-font-weight: bold; " +
+                "-fx-padding: 8 18 8 18; -fx-background-radius: 6px; -fx-cursor: hand;");
         btnEditar.setOnAction(e -> {
             abrirFormularioCliente(cliente);
-
             ventana.close();
         });
 
-        header.getChildren().addAll(lblNombre, infoDatos, btnEditar, btnEliminarCliente);
+        header.getChildren().addAll(lineaNombre, infoDatos, btnEditar);
         root.setTop(header);
 
-        // ========== CENTER: SplitPane con datos, expedientes y documentos ==========
+        // ========== CENTER ==========
         SplitPane splitPane = new SplitPane();
         splitPane.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
         splitPane.setDividerPositions(0.3);
+        splitPane.setPadding(new Insets(16));
 
-        // ========== PANEL IZQUIERDO: Datos completos del cliente ==========
         VBox panelDatos = crearPanelDatosCliente(cliente);
 
-        // ========== PANEL DERECHO: Expedientes y Documentos ==========
         SplitPane splitDerecha = new SplitPane();
         splitDerecha.setOrientation(javafx.geometry.Orientation.VERTICAL);
         splitDerecha.setDividerPositions(0.5);
 
-        VBox panelExpedientes = crearPanelExpedientesCliente(cliente,ventana);
+        VBox panelExpedientes = crearPanelExpedientesCliente(cliente, ventana);
         VBox panelDocumentos = crearPanelDocumentosCliente(cliente);
 
         splitDerecha.getItems().addAll(panelExpedientes, panelDocumentos);
-
         splitPane.getItems().addAll(panelDatos, splitDerecha);
         root.setCenter(splitPane);
 
-        // ========== BOTTOM: Botón cerrar ==========
+        // ========== BOTTOM: cerrar ==========
         HBox bottomBar = new HBox(10);
         bottomBar.setAlignment(Pos.CENTER_RIGHT);
-        bottomBar.setPadding(new Insets(10));
+        bottomBar.setPadding(new Insets(10, 16, 16, 16));
 
-        Button btnCerrar = new Button("❌ Cerrar");
+        Button btnCerrar = new Button("Cerrar");
+        btnCerrar.getStyleClass().add("btn-ghost");
         btnCerrar.setOnAction(e -> ventana.close());
 
         bottomBar.getChildren().add(btnCerrar);
         root.setBottom(bottomBar);
 
         Scene scene = new Scene(root, 1200, 800);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.show();
     }
@@ -4564,62 +4700,72 @@ public class MainController {
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
 
-        Label titulo = new Label("📁 Expedientes del Cliente");
-        titulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        Label titulo = new Label("Expedientes del Cliente");
+        titulo.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
 
-        Button btnNuevoExpediente = new Button("➕ Nuevo Expediente");
-        btnNuevoExpediente.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button btnNuevoExpediente = new Button("+  Nuevo Expediente");
+        btnNuevoExpediente.getStyleClass().add("btn-primary");
         btnNuevoExpediente.setOnAction(e -> {
-            // Cerrar la ventana del cliente
             ventanaCliente.close();
+            abrirFormularioNuevoExpediente(cliente);
 
-            // Cambiar a la pestaña de expedientes
-            TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
-            if (tabPane != null) {
-                Tab tabExpedientes = tabPane.getTabs().stream()
-                        .filter(t -> t.getText().contains("Expedientes"))
-                        .findFirst()
-                        .orElse(null);
-                if (tabExpedientes != null) {
-                    tabPane.getSelectionModel().select(tabExpedientes);
-                }
-            }
 
-            // Pre-cargar el cliente
+
             limpiarFormularioExpediente();
             txtCliente.setText(cliente.getNombreCompleto());
             mostrarInfo("Complete los datos del nuevo expediente para: " + cliente.getNombreCompleto());
         });
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
         header.getChildren().addAll(titulo, spacer, btnNuevoExpediente);
 
-        // ========== TABLA DE EXPEDIENTES ==========
         TableView<Expediente> tablaExp = new TableView<>();
         ObservableList<Expediente> listaExp = FXCollections.observableArrayList();
         tablaExp.setItems(listaExp);
+        tablaExp.getStyleClass().add("table-view");
+        tablaExp.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<Expediente, String> colNumero = new TableColumn<>("Número");
         colNumero.setCellValueFactory(new PropertyValueFactory<>("numero"));
-        colNumero.setPrefWidth(120);
+        colNumero.setMaxWidth(1f * Integer.MAX_VALUE * 15);
 
         TableColumn<Expediente, String> colCaratula = new TableColumn<>("Carátula");
         colCaratula.setCellValueFactory(new PropertyValueFactory<>("caratula"));
-        colCaratula.setPrefWidth(350);
+        colCaratula.setMaxWidth(1f * Integer.MAX_VALUE * 45);
 
         TableColumn<Expediente, EstadoExpediente> colEstado = new TableColumn<>("Estado");
         colEstado.setCellValueFactory(new PropertyValueFactory<>("estado"));
-        colEstado.setPrefWidth(100);
+        colEstado.setMaxWidth(1f * Integer.MAX_VALUE * 22);
+        colEstado.setCellFactory(col -> new TableCell<Expediente, EstadoExpediente>() {
+            @Override
+            protected void updateItem(EstadoExpediente estado, boolean empty) {
+                super.updateItem(estado, empty);
+                if (empty || estado == null) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+                Label pill = new Label(estado.getDisplayName());
+                pill.getStyleClass().add("pill");
+                switch (estado) {
+                    case ACTIVO -> pill.getStyleClass().add("pill-green");
+                    case ARCHIVADO -> pill.getStyleClass().add("pill-blue");
+                    case SUSPENDIDO -> pill.getStyleClass().add("pill-amber");
+                    case FINALIZADO -> pill.getStyleClass().add("pill-red");
+                }
+                setGraphic(pill);
+                setText(null);
+            }
+        });
 
         TableColumn<Expediente, LocalDate> colFecha = new TableColumn<>("Fecha");
         colFecha.setCellValueFactory(new PropertyValueFactory<>("fechaInicio"));
-        colFecha.setPrefWidth(100);
+        colFecha.setMaxWidth(1f * Integer.MAX_VALUE * 18);
 
         tablaExp.getColumns().addAll(colNumero, colCaratula, colEstado, colFecha);
 
-        // Doble clic para ver movimientos
         tablaExp.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2 && tablaExp.getSelectionModel().getSelectedItem() != null) {
                 expedienteSeleccionado = tablaExp.getSelectionModel().getSelectedItem();
@@ -4627,51 +4773,12 @@ public class MainController {
             }
         });
 
-        // ========== CARGAR EXPEDIENTES DEL CLIENTE (AQUÍ ES DONDE DEBE ESTAR) ==========
+        // Cargar expedientes del cliente
         try {
-            System.out.println("========================================");
-            System.out.println("🔍 DEBUG: Cargando expedientes del cliente");
-            System.out.println("Cliente ID: " + cliente.getId());
-            System.out.println("Cliente Nombre: " + cliente.getNombreCompleto());
-
             ExpedienteDAO expedienteDAO = new ExpedienteDAO();
             List<Expediente> expedientes = expedienteDAO.listarPorClienteId(cliente.getId());
-
-            System.out.println("📊 Cantidad de expedientes encontrados: " + expedientes.size());
-
-            if (expedientes.isEmpty()) {
-                System.out.println("⚠️ LISTA VACÍA - Verificando en BD...");
-
-                // Verificar directamente en la BD
-                try (Connection conn = Database.getConnection();
-                     PreparedStatement ps = conn.prepareStatement(
-                             "SELECT id, numero, caratula, cliente_id FROM expedientes WHERE cliente_id = ?")) {
-                    ps.setInt(1, cliente.getId());
-                    ResultSet rs = ps.executeQuery();
-
-                    System.out.println("🔍 Consulta directa a BD:");
-                    while (rs.next()) {
-                        System.out.println("  - ID: " + rs.getInt("id") +
-                                " | Número: " + rs.getString("numero") +
-                                " | cliente_id: " + rs.getInt("cliente_id"));
-                    }
-                }
-            } else {
-                System.out.println("✅ Expedientes encontrados:");
-                for (Expediente exp : expedientes) {
-                    System.out.println("  - " + exp.getNumero() + " | " + exp.getCaratula() +
-                            " | cliente_id: " + exp.getClienteId());
-                }
-            }
-
-            listaExp.clear();
-            listaExp.addAll(expedientes);
-            System.out.println("📋 Items en ObservableList: " + listaExp.size());
-            System.out.println("========================================");
-
+            listaExp.setAll(expedientes);
         } catch (SQLException e) {
-            System.err.println("❌ ERROR: " + e.getMessage());
-            e.printStackTrace();
             mostrarError("Error al cargar expedientes: " + e.getMessage());
         }
 
@@ -4689,11 +4796,11 @@ public class MainController {
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
 
-        Label titulo = new Label("📎 Documentos del Cliente");
-        titulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        Label titulo = new Label("Documentos del Cliente");
+        titulo.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
 
-        Button btnSubirDoc = new Button("➕ Subir Documento");
-        btnSubirDoc.setStyle("-fx-background-color: #3498db; -fx-text-fill: white;");
+        Button btnSubirDoc = new Button("+  Subir Documento");
+        btnSubirDoc.getStyleClass().add("btn-primary");
         btnSubirDoc.setOnAction(e -> abrirDialogoSubirDocumento(cliente));
 
         Region spacer = new Region();
@@ -4701,38 +4808,36 @@ public class MainController {
 
         header.getChildren().addAll(titulo, spacer, btnSubirDoc);
 
-        // Tabla de documentos
         TableView<DocumentoCliente> tablaDocs = new TableView<>();
         ObservableList<DocumentoCliente> listaDocs = FXCollections.observableArrayList();
         tablaDocs.setItems(listaDocs);
+        tablaDocs.getStyleClass().add("table-view");
+        tablaDocs.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<DocumentoCliente, String> colNombre = new TableColumn<>("Nombre");
         colNombre.setCellValueFactory(new PropertyValueFactory<>("nombreOriginal"));
-        colNombre.setPrefWidth(250);
+        colNombre.setMaxWidth(1f * Integer.MAX_VALUE * 40);
 
         TableColumn<DocumentoCliente, TipoDocumentoCliente> colTipo = new TableColumn<>("Tipo");
         colTipo.setCellValueFactory(new PropertyValueFactory<>("tipoDocumento"));
-        colTipo.setPrefWidth(150);
+        colTipo.setMaxWidth(1f * Integer.MAX_VALUE * 22);
 
-        TableColumn<DocumentoCliente, String> colTamanio = new TableColumn<>("Tamaño");
-        colTamanio.setCellValueFactory(cellData ->
-                new javafx.beans.property.SimpleStringProperty(cellData.getValue().getTamanioFormateado()));
-        colTamanio.setPrefWidth(100);
+        TableColumn<DocumentoCliente, String> colFecha = new TableColumn<>("Fecha Subida");
+        colFecha.setCellValueFactory(cellData -> {
+            LocalDateTime f = cellData.getValue().getFechaSubida();
+            String texto = f != null ? f.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "";
+            return new javafx.beans.property.SimpleStringProperty(texto);
+        });
+        colFecha.setMaxWidth(1f * Integer.MAX_VALUE * 20);
 
-        TableColumn<DocumentoCliente, LocalDateTime> colFecha = new TableColumn<>("Fecha Subida");
-        colFecha.setCellValueFactory(new PropertyValueFactory<>("fechaSubida"));
-        colFecha.setPrefWidth(150);
-
-        // Columna de acciones
         TableColumn<DocumentoCliente, Void> colAcciones = new TableColumn<>("Acciones");
-        colAcciones.setPrefWidth(150);
+        colAcciones.setMaxWidth(1f * Integer.MAX_VALUE * 18);
         colAcciones.setCellFactory(param -> new TableCell<>() {
-            private final Button btnAbrir = new Button("👁️ Ver");
-            private final Button btnEliminar = new Button("🗑️");
+            private final Button btnAbrir = new Button("Ver");
+            private final Button btnEliminar = new Button("Eliminar");
 
             {
-                //boton con nuevo estilo
-                btnAbrir.getStyleClass().addAll("button", "button-info");
+                btnAbrir.getStyleClass().add("button-info");
                 btnAbrir.setOnAction(e -> {
                     DocumentoCliente doc = getTableView().getItems().get(getIndex());
                     try {
@@ -4746,13 +4851,15 @@ public class MainController {
                 btnEliminar.setOnAction(e -> {
                     DocumentoCliente doc = getTableView().getItems().get(getIndex());
 
+                    String fechaTexto = doc.getFechaSubida() != null
+                            ? doc.getFechaSubida().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                            : "—";
+
                     StringBuilder mensaje = new StringBuilder();
                     mensaje.append("¿Eliminar el documento?\n\n");
-                    mensaje.append("📄 ").append(doc.getNombreOriginal()).append("\n");
-                    mensaje.append("📦 Tamaño: ").append(doc.getTamanioFormateado()).append("\n");
-                    mensaje.append("📅 Subido: ").append(doc.getFechaSubida().format(
-                            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))).append("\n\n");
-                    mensaje.append("⚠️ El archivo será eliminado del sistema de archivos.\n");
+                    mensaje.append("Archivo: ").append(doc.getNombreOriginal()).append("\n");
+                    mensaje.append("Subido: ").append(fechaTexto).append("\n\n");
+                    mensaje.append("El archivo será eliminado del sistema de archivos.\n");
                     mensaje.append("Esta acción no se puede deshacer.");
 
                     Alert confirmacion = new Alert(Alert.AlertType.WARNING);
@@ -4778,18 +4885,18 @@ public class MainController {
                 if (empty) {
                     setGraphic(null);
                 } else {
-                    HBox botones = new HBox(5, btnAbrir, btnEliminar);
+                    HBox botones = new HBox(6, btnAbrir, btnEliminar);
+                    botones.setAlignment(Pos.CENTER_LEFT);
                     setGraphic(botones);
                 }
             }
         });
 
-        tablaDocs.getColumns().addAll(colNombre, colTipo, colTamanio, colFecha, colAcciones);
+        tablaDocs.getColumns().addAll(colNombre, colTipo, colFecha, colAcciones);
 
-        // Cargar documentos del cliente
         try {
             List<DocumentoCliente> documentos = documentoClienteService.listarPorCliente(cliente.getId());
-            listaDocs.addAll(documentos);
+            listaDocs.setAll(documentos);
         } catch (SQLException e) {
             mostrarError("Error al cargar documentos: " + e.getMessage());
         }
@@ -5279,7 +5386,7 @@ public class MainController {
     private VBox crearPanelHonorarios(ComboBox<Expediente> cmbExpedientes) {
         VBox panel = new VBox(15);
         panel.setPadding(new Insets(15));
-
+        ObservableList<Honorario> listaHonorarios = FXCollections.observableArrayList();
         // Botón nuevo honorario
         Button btnNuevo = new Button("➕ Nuevo Honorario");
         btnNuevo.getStyleClass().addAll("button", "button-success");
@@ -5287,7 +5394,7 @@ public class MainController {
         btnNuevo.setOnAction(e -> {
             Expediente exp = cmbExpedientes.getValue();
             if (exp != null) {
-                abrirFormularioHonorario(null, exp.getId());
+                abrirFormularioHonorario(null, exp.getId(), listaHonorarios);
             } else {
                 mostrarAdvertencia("Seleccione un expediente primero");
             }
@@ -5295,7 +5402,6 @@ public class MainController {
 
         // Tabla de honorarios
         TableView<Honorario> tablaHonorarios = new TableView<>();
-        ObservableList<Honorario> listaHonorarios = FXCollections.observableArrayList();
         tablaHonorarios.setItems(listaHonorarios);
 
         TableColumn<Honorario, TipoHonorario> colTipo = new TableColumn<>("Tipo");
@@ -5330,7 +5436,7 @@ public class MainController {
             {
                 btnEditar.setOnAction(e -> {
                     Honorario h = getTableView().getItems().get(getIndex());
-                    abrirFormularioHonorario(h, h.getExpedienteId());
+                    abrirFormularioHonorario(h, h.getExpedienteId(), listaHonorarios);
                 });
 
                 btnCobrar.getStyleClass().addAll("button", "button-success");
@@ -5398,7 +5504,7 @@ public class MainController {
         }
     }
 
-    private void abrirFormularioHonorario(Honorario honorario, Integer expedienteId) {
+    private void abrirFormularioHonorario(Honorario honorario, Integer expedienteId, ObservableList<Honorario> listaTabla) {
 
         // Recargar lista de expedientes por si hay nuevos
         ComboBox<Expediente> cmbExpedientesForm = new ComboBox<>();
@@ -5511,6 +5617,10 @@ public class MainController {
                     mostrarInfo("Honorario actualizado correctamente");
                 }
 
+                // Recargar la tabla
+                if (listaTabla != null && expedienteId != null) {
+                    cargarHonorariosPorExpediente(expedienteId, listaTabla);
+                }
                 ventana.close();
 
             } catch (NumberFormatException ex) {
@@ -5534,20 +5644,21 @@ public class MainController {
     private VBox crearPanelGastos(ComboBox<Expediente> cmbExpedientes) {
         VBox panel = new VBox(15);
         panel.setPadding(new Insets(15));
+        ObservableList<Gasto> listaGastos = FXCollections.observableArrayList();
 
         Button btnNuevo = new Button("➕ Nuevo Gasto");
         btnNuevo.getStyleClass().add("btn-danger");
         btnNuevo.setOnAction(e -> {
             Expediente exp = cmbExpedientes.getValue();
             if (exp != null) {
-                abrirFormularioGasto(null, exp.getId());
+                abrirFormularioGasto(null, exp.getId(), listaGastos);
             } else {
                 mostrarAdvertencia("Seleccione un expediente primero");
             }
         });
 
         TableView<Gasto> tablaGastos = new TableView<>();
-        ObservableList<Gasto> listaGastos = FXCollections.observableArrayList();
+
         tablaGastos.setItems(listaGastos);
 
         TableColumn<Gasto, LocalDate> colFecha = new TableColumn<>("Fecha");
@@ -5576,7 +5687,7 @@ public class MainController {
             {
                 btnEditar.setOnAction(e -> {
                     Gasto g = getTableView().getItems().get(getIndex());
-                    abrirFormularioGasto(g, g.getExpedienteId());
+                    abrirFormularioGasto(g, g.getExpedienteId(), listaGastos);
                 });
 
                 btnEliminar.getStyleClass().add("btn-danger");
@@ -5631,7 +5742,7 @@ public class MainController {
         }
     }
 
-    private void abrirFormularioGasto(Gasto gasto, Integer expedienteId) {
+    private void abrirFormularioGasto(Gasto gasto, Integer expedienteId, ObservableList<Gasto> listaTabla) {
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
         ventana.setTitle(gasto == null ? "Nuevo Gasto" : "Editar Gasto");
@@ -5702,6 +5813,11 @@ public class MainController {
                     gastoService.actualizarGasto(g);
                     mostrarInfo("Gasto actualizado correctamente");
                 }
+                // Recargar la tabla
+                if (listaTabla != null && expedienteId != null) {
+                    cargarGastosPorExpediente(expedienteId, listaTabla);
+                }
+
 
                 ventana.close();
 
@@ -5848,7 +5964,44 @@ public class MainController {
                 new SimpleStringProperty(data.getValue().getConcepto()));
         colConcepto.setPrefWidth(200);
 
-        tablaPagos.getColumns().addAll(colFecha, colMonto, colFormaPago, colReferencia, colConcepto);
+        TableColumn<Pago, Void> colAcciones = new TableColumn<>("Acciones");
+        colAcciones.setPrefWidth(120);
+        colAcciones.setCellFactory(param -> new TableCell<>() {
+            private final Button btnEditar = new Button("✏️");
+            private final Button btnEliminar = new Button("🗑️");
+
+            {
+                btnEditar.setOnAction(e -> {
+                    Pago p = getTableView().getItems().get(getIndex());
+                    Expediente exp = cmbExpedientes.getValue();
+                    abrirFormularioPago(p, exp, tablaPagos.getItems());
+                });
+
+                btnEliminar.getStyleClass().add("btn-danger");
+                btnEliminar.setOnAction(e -> {
+                    Pago p = getTableView().getItems().get(getIndex());
+                    if (mostrarConfirmacion("¿Eliminar este pago?")) {
+                        try {
+                            pagoService.eliminarPago(p.getId());
+                            tablaPagos.getItems().remove(p);
+                            mostrarInfo("Pago eliminado");
+                        } catch (SQLException ex) {
+                            mostrarError("Error: " + ex.getMessage());
+                        }
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : new HBox(5, btnEditar, btnEliminar));
+            }
+        });
+
+        tablaPagos.getColumns().addAll(colFecha, colMonto, colFormaPago, colReferencia, colConcepto, colAcciones);
+
+
 
         // Botón Registrar Pago
         Button btnRegistrar = new Button("💰 Registrar Pago");
@@ -6489,199 +6642,174 @@ public class MainController {
 
 
 // ========== MÉTODO PARA MOSTRAR POPUP ==========
-    private void mostrarPopupEventosDelDia() {
-        try {
-            Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
-            LocalDate hoy = LocalDate.now();
+private void mostrarPopupEventosDelDia() {
+    try {
+        Integer usuarioId = SesionUsuario.getUsuarioActual().getId();
+        LocalDate hoy = LocalDate.now();
 
-            // Obtener eventos de HOY
-            List<EventoAgenda> eventosHoy = agendaService.listarPorFecha(hoy).stream()
-                    .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
-                    .toList();
+        List<EventoAgenda> eventosHoy = agendaService.listarPorFecha(hoy).stream()
+                .filter(e -> e.getUsuarioId().equals(usuarioId) && e.isPendiente())
+                .toList();
 
-            // Si no hay eventos, no mostrar nada
-            if (eventosHoy.isEmpty()) {
-                return;
-            }
-
-            // Crear ventana de popup
-            Stage popup = new Stage();
-            popup.initModality(Modality.NONE); // No modal para no bloquear
-            popup.setTitle("🔔 Eventos de Hoy");
-            popup.setAlwaysOnTop(true); // Mantener al frente
-
-            VBox root = new VBox(15);
-            root.setPadding(new Insets(20));
-            root.setStyle("-fx-background-color: white;");
-
-            // Header
-            HBox header = new HBox(10);
-            header.setAlignment(Pos.CENTER_LEFT);
-            header.setPadding(new Insets(15));
-            header.setStyle("-fx-background-color: linear-gradient(to right, #e74c3c, #c0392b); " +
-                    "-fx-background-radius: 10 10 0 0;");
-
-            Label lblIcono = new Label("⚠️");
-            lblIcono.setStyle("-fx-font-size: 32px;");
-
-            VBox textoHeader = new VBox(3);
-            Label lblTitulo = new Label("¡Tienes eventos pendientes HOY!");
-            lblTitulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
-
-            Label lblSubtitulo = new Label(LocalDate.now().format(
-                    DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", new java.util.Locale("es", "ES"))));
-            lblSubtitulo.setStyle("-fx-font-size: 13px; -fx-text-fill: white;");
-
-            textoHeader.getChildren().addAll(lblTitulo, lblSubtitulo);
-            header.getChildren().addAll(lblIcono, textoHeader);
-
-            // Lista de eventos
-            VBox listaEventos = new VBox(10);
-            listaEventos.setPadding(new Insets(10));
-
-            DateTimeFormatter horaFormatter = DateTimeFormatter.ofPattern("HH:mm");
-
-            for (EventoAgenda evento : eventosHoy) {
-                HBox itemEvento = new HBox(15);
-                itemEvento.setPadding(new Insets(15));
-                itemEvento.setAlignment(Pos.CENTER_LEFT);
-                itemEvento.setStyle("-fx-background-color: #f8f9fa; " +
-                        "-fx-border-color: #dee2e6; " +
-                        "-fx-border-width: 1; " +
-                        "-fx-border-radius: 8; " +
-                        "-fx-background-radius: 8;");
-
-                // Icono según tipo
-                String icono = switch (evento.getTipo()) {
-                    case AUDIENCIA -> "⚖️";
-                    case VENCIMIENTO -> "⏰";
-                    case REUNION -> "👥";
-                    case PRESENTACION -> "📝";
-                    default -> "📌";
-                };
-
-                Label lblIconoEvento = new Label(icono);
-                lblIconoEvento.setStyle("-fx-font-size: 28px;");
-
-                VBox detallesEvento = new VBox(5);
-
-                Label lblHora = new Label(evento.getFechaHora().format(horaFormatter));
-                lblHora.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
-
-                Label lblTituloEvento = new Label(evento.getTitulo());
-                lblTituloEvento.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
-
-                Label lblTipo = new Label(evento.getTipo().getDisplayName());
-                lblTipo.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
-
-                if (evento.getUbicacion() != null && !evento.getUbicacion().isEmpty()) {
-                    Label lblUbicacion = new Label("📍 " + evento.getUbicacion());
-                    lblUbicacion.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
-                    detallesEvento.getChildren().add(lblUbicacion);
-                }
-
-                detallesEvento.getChildren().addAll(lblHora, lblTituloEvento, lblTipo);
-
-                // Calcular tiempo restante
-                LocalDateTime ahora = LocalDateTime.now();
-                long minutosRestantes = java.time.Duration.between(ahora, evento.getFechaHora()).toMinutes();
-
-                VBox tiempoRestante = new VBox(5);
-                tiempoRestante.setAlignment(Pos.CENTER);
-
-                if (minutosRestantes > 0) {
-                    String tiempoTexto;
-                    if (minutosRestantes < 60) {
-                        tiempoTexto = "En " + minutosRestantes + " min";
-                    } else {
-                        long horas = minutosRestantes / 60;
-                        tiempoTexto = "En " + horas + "h " + (minutosRestantes % 60) + "m";
-                    }
-
-                    Label lblTiempo = new Label(tiempoTexto);
-                    lblTiempo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; " +
-                            "-fx-text-fill: " + (minutosRestantes < 60 ? "#e74c3c" : "#f39c12") + ";");
-                    tiempoRestante.getChildren().add(lblTiempo);
-                } else if (minutosRestantes > -60) {
-                    Label lblTiempo = new Label("¡AHORA!");
-                    lblTiempo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
-                    tiempoRestante.getChildren().add(lblTiempo);
-                }
-
-                Region spacer = new Region();
-                HBox.setHgrow(spacer, Priority.ALWAYS);
-
-                itemEvento.getChildren().addAll(lblIconoEvento, detallesEvento, spacer, tiempoRestante);
-                listaEventos.getChildren().add(itemEvento);
-            }
-
-            ScrollPane scrollEventos = new ScrollPane(listaEventos);
-            scrollEventos.setFitToWidth(true);
-            scrollEventos.setPrefHeight(300);
-            scrollEventos.setMaxHeight(400);
-            scrollEventos.setStyle("-fx-background-color: transparent;");
-
-            // Botones
-            HBox botones = new HBox(10);
-            botones.setAlignment(Pos.CENTER_RIGHT);
-            botones.setPadding(new Insets(10, 0, 0, 0));
-
-            Button btnVerAgenda = new Button("📅 Ver Agenda Completa");
-            btnVerAgenda.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
-            btnVerAgenda.setOnAction(e -> {
-                // Cambiar a la pestaña de agenda
-                TabPane tabPane = (TabPane) scene.getRoot().lookup("TabPane");
-                if (tabPane != null) {
-                    Tab tabAgenda = tabPane.getTabs().stream()
-                            .filter(t -> t.getText().contains("Agenda"))
-                            .findFirst()
-                            .orElse(null);
-                    if (tabAgenda != null) {
-                        tabPane.getSelectionModel().select(tabAgenda);
-                    }
-                }
-                popup.close();
-            });
-
-            Button btnCerrar = new Button("✅ Entendido");
-            btnCerrar.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
-            btnCerrar.setOnAction(e -> popup.close());
-
-            botones.getChildren().addAll(btnVerAgenda, btnCerrar);
-
-            root.getChildren().addAll(header, scrollEventos, botones);
-
-            Scene scene = new Scene(root, 550, Math.min(500, 200 + (eventosHoy.size() * 110)));
-            popup.setScene(scene);
-
-            // Posicionar en la esquina inferior derecha
-            popup.setX(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxX() - 570);
-            popup.setY(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxY() - scene.getHeight() - 50);
-
-            popup.show();
-
-            // Auto-cerrar después de 30 segundos
-            new Thread(() -> {
-                try {
-                    Thread.sleep(30000);
-                    javafx.application.Platform.runLater(() -> {
-                        if (popup.isShowing()) {
-                            popup.close();
-                        }
-                    });
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }).start();
-
-        } catch (SQLException e) {
-            System.err.println("Error al cargar eventos del día: " + e.getMessage());
+        if (eventosHoy.isEmpty()) {
+            return;
         }
 
+        Stage popup = new Stage();
+        popup.initModality(Modality.NONE);
+        popup.setTitle("Eventos de Hoy");
+        popup.setAlwaysOnTop(true);
 
+        VBox root = new VBox();
+        root.setStyle("-fx-background-color: white;");
 
+        // ===== Header sobrio =====
+        VBox header = new VBox(3);
+        header.setPadding(new Insets(18, 20, 18, 20));
+        header.setStyle("-fx-background-color: #0C447C;");
 
+        Label lblTitulo = new Label("Eventos pendientes para hoy");
+        lblTitulo.setStyle("-fx-font-size: 17px; -fx-font-weight: bold; -fx-text-fill: white;");
+
+        Label lblSubtitulo = new Label(hoy.format(
+                DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", new java.util.Locale("es", "ES"))));
+        lblSubtitulo.setStyle("-fx-font-size: 13px; -fx-text-fill: #B5D4F4;");
+
+        header.getChildren().addAll(lblTitulo, lblSubtitulo);
+
+        // ===== Lista de eventos =====
+        VBox listaEventos = new VBox(10);
+        listaEventos.setPadding(new Insets(16));
+
+        DateTimeFormatter horaFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+        for (EventoAgenda evento : eventosHoy) {
+            HBox itemEvento = new HBox(14);
+            itemEvento.setPadding(new Insets(14));
+            itemEvento.setAlignment(Pos.CENTER_LEFT);
+            itemEvento.setStyle("-fx-background-color: #F8F8F6; " +
+                    "-fx-border-color: rgba(0,0,0,0.08); " +
+                    "-fx-border-width: 1; " +
+                    "-fx-border-radius: 8; " +
+                    "-fx-background-radius: 8;");
+
+            // Hora destacada a la izquierda
+            Label lblHora = new Label(evento.getFechaHora().format(horaFormatter));
+            lblHora.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #185FA5; -fx-min-width: 56px;");
+
+            // Detalles
+            VBox detallesEvento = new VBox(4);
+
+            Label lblTituloEvento = new Label(evento.getTitulo());
+            lblTituloEvento.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+
+            // Pill del tipo
+            String nivel = switch (evento.getTipo()) {
+                case AUDIENCIA -> "red";
+                case VENCIMIENTO -> "amber";
+                case REUNION -> "blue";
+                case PRESENTACION -> "green";
+                default -> "blue";
+            };
+            Label pillTipo = new Label(evento.getTipo().getDisplayName());
+            pillTipo.getStyleClass().addAll("pill", "pill-" + nivel);
+
+            HBox lineaTipo = new HBox(8, pillTipo);
+            lineaTipo.setAlignment(Pos.CENTER_LEFT);
+
+            detallesEvento.getChildren().addAll(lblTituloEvento, lineaTipo);
+
+            if (evento.getUbicacion() != null && !evento.getUbicacion().isEmpty()) {
+                Label lblUbicacion = new Label(evento.getUbicacion());
+                lblUbicacion.getStyleClass().add("text-secondary");
+                lblUbicacion.setStyle("-fx-font-size: 12px;");
+                detallesEvento.getChildren().add(lblUbicacion);
+            }
+
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+
+            // Tiempo restante
+            VBox tiempoRestante = new VBox();
+            tiempoRestante.setAlignment(Pos.CENTER_RIGHT);
+
+            LocalDateTime ahora = LocalDateTime.now();
+            long minutosRestantes = java.time.Duration.between(ahora, evento.getFechaHora()).toMinutes();
+
+            if (minutosRestantes > 0) {
+                String tiempoTexto;
+                if (minutosRestantes < 60) {
+                    tiempoTexto = "En " + minutosRestantes + " min";
+                } else {
+                    long horas = minutosRestantes / 60;
+                    tiempoTexto = "En " + horas + "h " + (minutosRestantes % 60) + "m";
+                }
+                Label lblTiempo = new Label(tiempoTexto);
+                lblTiempo.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: "
+                        + (minutosRestantes < 60 ? "#791F1F" : "#633806") + ";");
+                tiempoRestante.getChildren().add(lblTiempo);
+            } else if (minutosRestantes > -60) {
+                Label lblTiempo = new Label("Ahora");
+                lblTiempo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #791F1F;");
+                tiempoRestante.getChildren().add(lblTiempo);
+            }
+
+            itemEvento.getChildren().addAll(lblHora, detallesEvento, spacer, tiempoRestante);
+            listaEventos.getChildren().add(itemEvento);
+        }
+
+        ScrollPane scrollEventos = new ScrollPane(listaEventos);
+        scrollEventos.setFitToWidth(true);
+        scrollEventos.setPrefHeight(300);
+        scrollEventos.setMaxHeight(400);
+        scrollEventos.getStyleClass().add("scroll-pane");
+
+        // ===== Botones =====
+        HBox botones = new HBox(10);
+        botones.setAlignment(Pos.CENTER_RIGHT);
+        botones.setPadding(new Insets(12, 16, 16, 16));
+
+        Button btnVerAgenda = new Button("Ver Agenda Completa");
+        btnVerAgenda.getStyleClass().add("btn-ghost");
+        btnVerAgenda.setOnAction(e -> {
+            irASeccion(viewAgenda, navAgenda);
+            popup.close();
+        });
+        Button btnCerrar = new Button("Entendido");
+        btnCerrar.getStyleClass().add("btn-primary");
+        btnCerrar.setOnAction(e -> popup.close());
+
+        botones.getChildren().addAll(btnVerAgenda, btnCerrar);
+
+        root.getChildren().addAll(header, scrollEventos, botones);
+
+        Scene scenePopup = new Scene(root, 500, Math.min(480, 200 + (eventosHoy.size() * 100)));
+        scenePopup.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
+        popup.setScene(scenePopup);
+
+        popup.setX(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxX() - 520);
+        popup.setY(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxY() - scenePopup.getHeight() - 50);
+
+        popup.show();
+
+        // Auto-cerrar después de 30 segundos
+        new Thread(() -> {
+            try {
+                Thread.sleep(30000);
+                javafx.application.Platform.runLater(() -> {
+                    if (popup.isShowing()) {
+                        popup.close();
+                    }
+                });
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+
+    } catch (SQLException e) {
+        System.err.println("Error al cargar eventos del día: " + e.getMessage());
     }
+}
     // ==================== CLASE AUXILIAR PARA RECORDATORIOS ====================
     private static class RecordatorioOpcion {
         private final Integer minutos;
@@ -6737,6 +6865,55 @@ public class MainController {
 
     private String formatearMoneda(double monto) {
         return String.format("$%,.0f", monto).replace(",", ".");
+    }
+
+    // Representa una notificación del dashboard
+    private static class Notificacion {
+        final String texto;
+        final String nivel; // "header", "red", "amber", "green", "blue", "muted"
+
+        Notificacion(String texto, String nivel) {
+            this.texto = texto;
+            this.nivel = nivel;
+        }
+    }
+    // Item de la lista de próximos eventos del dashboard
+    private static class ItemProximoEvento {
+        final boolean esEncabezado;
+        final String textoEncabezado;
+        final String hora;
+        final String titulo;
+        final String tipo;
+        final String nivelPill; // green / amber / blue / red
+
+        // Encabezado de día
+        static ItemProximoEvento header(String texto) {
+            return new ItemProximoEvento(true, texto, null, null, null, null);
+        }
+        // Evento
+        static ItemProximoEvento evento(String hora, String titulo, String tipo, String nivelPill) {
+            return new ItemProximoEvento(false, null, hora, titulo, tipo, nivelPill);
+        }
+
+        private ItemProximoEvento(boolean esEncabezado, String textoEncabezado,
+                                  String hora, String titulo, String tipo, String nivelPill) {
+            this.esEncabezado = esEncabezado;
+            this.textoEncabezado = textoEncabezado;
+            this.hora = hora;
+            this.titulo = titulo;
+            this.tipo = tipo;
+            this.nivelPill = nivelPill;
+        }
+    }
+
+    // Navega a una sección desde cualquier parte del código
+    private void irASeccion(VBox vista, Button navBtn) {
+        if (contentArea == null || vista == null) return;
+        contentArea.getChildren().setAll(vista);
+        // Resaltar el item del sidebar correspondiente (si se pasó)
+        if (navBtn != null) {
+            navBtn.setStyle(estiloNavItem(true));
+        }
     }
 
 }

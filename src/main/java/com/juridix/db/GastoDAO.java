@@ -207,4 +207,33 @@ public class GastoDAO {
 
         return gasto;
     }
+
+    public List<Gasto> listarPorCliente(Integer clienteId) throws SQLException {
+        String sql = """
+        SELECT g.* FROM gastos g
+        INNER JOIN expedientes e ON g.expediente_id = e.id
+        WHERE e.cliente_id = ?
+        ORDER BY g.fecha ASC
+    """;
+
+        List<Gasto> gastos = new ArrayList<>();
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, clienteId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    gastos.add(mapearGasto(rs));
+                }
+            }
+
+            return gastos;
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error al listar gastos por cliente: " + e.getMessage());
+            throw e;
+        }
+    }
 }

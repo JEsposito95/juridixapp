@@ -96,4 +96,11 @@ public class GastoService {
             throw new IllegalArgumentException("La fecha no puede ser futura");
         }
     }
+
+    public List<Gasto> listarPorCliente(Integer clienteId) throws SQLException {
+        if (clienteId == null || clienteId <= 0) {
+            throw new IllegalArgumentException("El ID del cliente debe ser válido");
+        }
+        return gastoDAO.listarPorCliente(clienteId);
+    }
 }

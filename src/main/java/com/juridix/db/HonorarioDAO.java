@@ -286,4 +286,33 @@ public class HonorarioDAO {
 
         return honorario;
     }
+
+    public List<Honorario> listarPorCliente(Integer clienteId) throws SQLException {
+        String sql = """
+        SELECT h.* FROM honorarios h
+        INNER JOIN expedientes e ON h.expediente_id = e.id
+        WHERE e.cliente_id = ?
+        ORDER BY h.fecha_estimada ASC, h.fecha_creacion ASC
+    """;
+
+        List<Honorario> honorarios = new ArrayList<>();
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, clienteId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    honorarios.add(mapearHonorario(rs));
+                }
+            }
+
+            return honorarios;
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error al listar honorarios por cliente: " + e.getMessage());
+            throw e;
+        }
+    }
 }

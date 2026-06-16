@@ -123,4 +123,11 @@ public class HonorarioService {
             throw new IllegalArgumentException("El porcentaje debe estar entre 0 y 100");
         }
     }
+
+    public List<Honorario> listarPorCliente(Integer clienteId) throws SQLException {
+        if (clienteId == null || clienteId <= 0) {
+            throw new IllegalArgumentException("El ID del cliente debe ser válido");
+        }
+        return honorarioDAO.listarPorCliente(clienteId);
+    }
 }
