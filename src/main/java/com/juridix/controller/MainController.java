@@ -106,11 +106,21 @@ public class MainController {
     // Agregar junto a los otros componentes
     private ListView<Notificacion> listNotificaciones;
 
+    // Navegación principal
     private StackPane contentArea;
+    private Button btnEconomiaNav;
+    private VBox viewEconomia;
+    private Button[] botonesNav;
+
+    // ComboBox del panel global de Economía (para preseleccionar expediente)
+    private ComboBox<Expediente> cmbExpedientesEconomia;
+
     private VBox viewAgenda;
     private VBox viewExpedientes;
     private Button navAgenda;
     private Button navExpedientes;
+
+
 
     private TableView<EventoAgenda> tablaEventos;
     private final ObservableList<EventoAgenda> listaEventos = FXCollections.observableArrayList();
@@ -303,14 +313,15 @@ public class MainController {
         viewExpedientes = crearPanelExpedientes();
         VBox viewClientes    = crearPanelClientes();
         viewAgenda = crearPanelAgenda();
-        VBox viewEconomia    = crearPanelEconomia();
+        this.viewEconomia    = crearPanelEconomia();
 
         contentArea.getChildren().add(viewDashboard);
 
         // Acción de navegación
         Runnable[] acciones = new Runnable[5];
-        Button[] botones = {btnDashboard, btnExpedientes, btnClientes, btnAgenda, btnEconomia};
-        VBox[] vistas = {viewDashboard, viewExpedientes, viewClientes, viewAgenda, viewEconomia};
+        this.botonesNav = new Button[]{btnDashboard, btnExpedientes, btnClientes, btnAgenda, btnEconomia};
+        Button[] botones = this.botonesNav;
+        VBox[] vistas = {viewDashboard, viewExpedientes, viewClientes, viewAgenda, this.viewEconomia};
 
         for (int i = 0; i < botones.length; i++) {
             final int idx = i;
@@ -1624,58 +1635,86 @@ public class MainController {
     }
 
     private VBox crearPanelEconomiaExpediente() {
-        VBox panel = new VBox(15);
+        VBox panel = new VBox(20);
         panel.setPadding(new Insets(20));
 
-        // Resumen económico
-        VBox resumen = crearResumenEconomico();
+        Label titulo = new Label("Economía del Expediente");
+        titulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        // TabPane con las 4 pestañas
-        TabPane tabPaneEconomia = new TabPane();
+        // ===== TARJETAS DE RESUMEN =====
+        HBox tarjetas = new HBox(15);
+        tarjetas.setAlignment(Pos.CENTER_LEFT);
 
-        Tab tabCuotas = new Tab("💵 Plan de Cuotas");
-        tabCuotas.setClosable(false);
+        try {
+            double totalHonorarios = honorarioService.calcularTotalPorExpediente(expedienteSeleccionado.getId());
+            double totalGastos     = gastoService.calcularTotalPorExpediente(expedienteSeleccionado.getId());
+            double totalPagos      = pagoService.calcularTotalPorExpediente(expedienteSeleccionado.getId());
 
-        // ✅ IMPORTANTE: Envolver en ScrollPane
+            // Cuotas
+            double totalCuotasAcordado = 0;
+            double totalCuotasPagado   = 0;
+            List<Cuota> cuotas = cuotaService.listarCuotasPorExpediente(expedienteSeleccionado.getId());
+            for (Cuota c : cuotas) {
+                totalCuotasAcordado += c.getMontoTotalAcordado();
+                totalCuotasPagado   += c.getMontoPagado();
+            }
+
+            double totalDebido = totalHonorarios + totalGastos + totalCuotasAcordado;
+            double totalAbonado = totalPagos + totalCuotasPagado;
+            double saldo = totalDebido - totalAbonado;
+
+            tarjetas.getChildren().addAll(
+                    crearTarjetaFinanciera("Honorarios",    formatearMoneda(totalHonorarios),    "#3498db"),
+                    crearTarjetaFinanciera("Gastos",        formatearMoneda(totalGastos),        "#e74c3c"),
+                    crearTarjetaFinanciera("Pagos",         formatearMoneda(totalAbonado),       "#27ae60"),
+                    crearTarjetaFinanciera("Saldo Pendiente", formatearMoneda(saldo),
+                            saldo > 0 ? "#f39c12" : "#27ae60")
+            );
+        } catch (SQLException e) {
+            Label lblError = new Label("Error al cargar resumen: " + e.getMessage());
+            lblError.setStyle("-fx-text-fill: red;");
+            tarjetas.getChildren().add(lblError);
+        }
+
+        // ===== PLAN DE CUOTAS (se mantiene acá) =====
+        Label lblCuotas = new Label("Plan de Cuotas");
+        lblCuotas.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 10 0 5 0;");
+
         ScrollPane scrollCuotas = new ScrollPane(crearPanelCuotasDetalle());
         scrollCuotas.setFitToWidth(true);
         scrollCuotas.setStyle("-fx-background-color: transparent;");
-        tabCuotas.setContent(scrollCuotas);
+        scrollCuotas.setPrefHeight(320);
 
-        Tab tabHonorarios = new Tab("⚖️ Honorarios");
-        tabHonorarios.setClosable(false);
+        // ===== BOTÓN IR A ECONOMÍA =====
+        Separator sep = new Separator();
 
-        // ✅ IMPORTANTE: Envolver en ScrollPane
-        ScrollPane scrollHonorarios = new ScrollPane(crearPanelHonorariosDetalle());
-        scrollHonorarios.setFitToWidth(true);
-        scrollHonorarios.setStyle("-fx-background-color: transparent;");
-        tabHonorarios.setContent(scrollHonorarios);
+        Label lblInfo = new Label(
+                "Para registrar o editar honorarios, gastos y pagos de este expediente usá el módulo de Economía. " +
+                        "El expediente quedará preseleccionado automáticamente.");
+        lblInfo.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 12px;");
+        lblInfo.setWrapText(true);
 
-        Tab tabOtrosPagos = new Tab("💰 Otros Pagos");
-        tabOtrosPagos.setClosable(false);
+        Button btnIrEconomia = new Button("📊 Ir a Gestión Económica");
+        btnIrEconomia.setStyle(
+                "-fx-background-color: #185FA5; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 6; -fx-cursor: hand;");
+        btnIrEconomia.setOnAction(e -> {
+            // Preseleccionar el expediente en el combo del panel global
+            if (cmbExpedientesEconomia != null && expedienteSeleccionado != null) {
+                cmbExpedientesEconomia.setValue(expedienteSeleccionado);
+            }
+            // Navegar al panel de Economía
+            if (contentArea != null && viewEconomia != null) {
+                contentArea.getChildren().setAll(viewEconomia);
+                if (botonesNav != null) {
+                    for (Button b : botonesNav) b.setStyle(estiloNavItem(false));
+                    botonesNav[4].setStyle(estiloNavItem(true)); // índice 4 = Economía
+                }
+            }
+        });
 
-        // ✅ IMPORTANTE: Envolver en ScrollPane
-        ScrollPane scrollPagos = new ScrollPane(crearPanelPagosDetalle());
-        scrollPagos.setFitToWidth(true);
-        scrollPagos.setStyle("-fx-background-color: transparent;");
-        tabOtrosPagos.setContent(scrollPagos);
-
-        Tab tabGastos = new Tab("📉 Gastos");
-        tabGastos.setClosable(false);
-
-        // ✅ IMPORTANTE: Envolver en ScrollPane
-        ScrollPane scrollGastos = new ScrollPane(crearPanelGastosDetalle());
-        scrollGastos.setFitToWidth(true);
-        scrollGastos.setStyle("-fx-background-color: transparent;");
-        tabGastos.setContent(scrollGastos);
-
-        tabPaneEconomia.getTabs().addAll(tabCuotas, tabHonorarios, tabOtrosPagos, tabGastos);
-
-        // ✅ IMPORTANTE: El TabPane debe crecer para llenar el espacio
-        VBox.setVgrow(tabPaneEconomia, Priority.ALWAYS);
-
-        panel.getChildren().addAll(resumen, tabPaneEconomia);
-
+        panel.getChildren().addAll(titulo, tarjetas, lblCuotas, scrollCuotas,
+                sep, lblInfo, btnIrEconomia);
         return panel;
     }
 
@@ -2467,7 +2506,7 @@ public class MainController {
 
         // Botón nuevo honorario
         Button btnNuevo = new Button("➕ Nuevo Honorario");
-        btnNuevo.getStyleClass().addAll("button", "button-success");
+        btnNuevo.getStyleClass().add("btn-primary");
         btnNuevo.setOnAction(e -> {
             abrirFormularioHonorario(null, expedienteSeleccionado.getId(), lista);
             // Recargar la lista
@@ -5275,12 +5314,16 @@ public class MainController {
         VBox panel = new VBox(20);
         panel.setPadding(new Insets(20));
 
-        Label titulo = new Label("💰 Gestión Económica");
-        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        VBox encabezado = new VBox(2);
+        Label titulo = new Label("Gestión Económica");
+        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1A1A18;");
+        Label subtitulo = new Label("Honorarios, gastos y pagos del estudio");
+        subtitulo.getStyleClass().add("text-secondary");
+        encabezado.getChildren().addAll(titulo, subtitulo);
 
         // ========== RESUMEN FINANCIERO ==========
-        HBox resumenFinanciero = new HBox(20);
-        resumenFinanciero.setAlignment(Pos.CENTER);
+        HBox resumenFinanciero = new HBox(16);
+        resumenFinanciero.setAlignment(Pos.CENTER_LEFT);
 
         try {
             // Calcular totales globales
@@ -5319,6 +5362,7 @@ public class MainController {
         ComboBox<Expediente> cmbExpedientes = new ComboBox<>();
         cmbExpedientes.setPromptText("Seleccione expediente...");
         cmbExpedientes.setPrefWidth(400);
+        this.cmbExpedientesEconomia = cmbExpedientes;
 
         try {
             List<Expediente> expedientes = expedienteService.listarActivos();
@@ -5358,7 +5402,7 @@ public class MainController {
 
         tabPaneEconomia.getTabs().addAll(tabHonorarios, tabGastos, tabPagos, tabCuentaCorriente);
 
-        panel.getChildren().addAll(titulo, resumenFinanciero, new Separator(), selectorExpediente, tabPaneEconomia);
+        panel.getChildren().addAll(encabezado, resumenFinanciero, new Separator(), selectorExpediente, tabPaneEconomia);
         VBox.setVgrow(tabPaneEconomia, Priority.ALWAYS);
 
         return panel;
@@ -5366,18 +5410,15 @@ public class MainController {
 
     // Tarjeta financiera
     private VBox crearTarjetaFinanciera(String titulo, String valor, String color) {
-        VBox tarjeta = new VBox(10);
-        tarjeta.setAlignment(Pos.CENTER);
-        tarjeta.setPadding(new Insets(20));
-        tarjeta.setStyle("-fx-background-color: white; -fx-border-color: " + color +
-                "; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10;");
-        tarjeta.setPrefSize(220, 120);
+        VBox tarjeta = new VBox(6);
+        tarjeta.getStyleClass().add("stat-card");
+        tarjeta.setPrefSize(200, 90);
 
         Label lblTitulo = new Label(titulo);
-        lblTitulo.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+        lblTitulo.getStyleClass().add("stat-label");
 
         Label lblValor = new Label(valor);
-        lblValor.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        lblValor.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
 
         tarjeta.getChildren().addAll(lblTitulo, lblValor);
         return tarjeta;
@@ -5391,18 +5432,18 @@ public class MainController {
         Button btnNuevo = new Button("➕ Nuevo Honorario");
         btnNuevo.getStyleClass().addAll("button", "button-success");
 
-        btnNuevo.setOnAction(e -> {
-            Expediente exp = cmbExpedientes.getValue();
-            if (exp != null) {
-                abrirFormularioHonorario(null, exp.getId(), listaHonorarios);
-            } else {
-                mostrarAdvertencia("Seleccione un expediente primero");
+        // Listener para cambio de expediente
+        cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                cargarHonorariosPorExpediente(newVal.getId(), listaHonorarios);
             }
         });
 
         // Tabla de honorarios
         TableView<Honorario> tablaHonorarios = new TableView<>();
         tablaHonorarios.setItems(listaHonorarios);
+        tablaHonorarios.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tablaHonorarios.getStyleClass().add("table-view");
 
         TableColumn<Honorario, TipoHonorario> colTipo = new TableColumn<>("Tipo");
         colTipo.setCellValueFactory(new PropertyValueFactory<>("tipo"));
@@ -5419,7 +5460,14 @@ public class MainController {
 
         TableColumn<Honorario, LocalDate> colFechaEstimada = new TableColumn<>("Fecha Estimada");
         colFechaEstimada.setCellValueFactory(new PropertyValueFactory<>("fechaEstimada"));
-        colFechaEstimada.setPrefWidth(150);
+        colFechaEstimada.setPrefWidth(130);
+        colFechaEstimada.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(LocalDate fecha, boolean empty) {
+                super.updateItem(fecha, empty);
+                setText((empty || fecha == null) ? null : fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            }
+        });
 
         TableColumn<Honorario, String> colDescripcion = new TableColumn<>("Descripción");
         colDescripcion.setCellValueFactory(new PropertyValueFactory<>("descripcion"));
@@ -5427,11 +5475,11 @@ public class MainController {
 
         // Columna acciones
         TableColumn<Honorario, Void> colAcciones = new TableColumn<>("Acciones");
-        colAcciones.setPrefWidth(180);
+        colAcciones.setPrefWidth(210);
         colAcciones.setCellFactory(param -> new TableCell<>() {
-            private final Button btnEditar = new Button("✏️");
-            private final Button btnCobrar = new Button("💰 Cobrar");
-            private final Button btnEliminar = new Button("🗑️");
+            private final Button btnEditar = new Button("Editar");
+            private final Button btnCobrar = new Button("Cobrar");
+            private final Button btnEliminar = new Button("Eliminar");
 
             {
                 btnEditar.setOnAction(e -> {
@@ -5439,7 +5487,8 @@ public class MainController {
                     abrirFormularioHonorario(h, h.getExpedienteId(), listaHonorarios);
                 });
 
-                btnCobrar.getStyleClass().addAll("button", "button-success");
+                btnEditar.getStyleClass().add("btn-ghost");
+                btnCobrar.getStyleClass().add("button-success");;
                 btnCobrar.setOnAction(e -> {
                     Honorario h = getTableView().getItems().get(getIndex());
                     try {
@@ -5478,7 +5527,7 @@ public class MainController {
             }
         });
 
-        tablaHonorarios.getColumns().addAll(colTipo, colMonto, colEstado, colFechaEstimada, colDescripcion, colAcciones);
+        tablaHonorarios.getColumns().addAll(colMonto, colEstado, colFechaEstimada, colDescripcion, colAcciones);
 
         // Listener para cambio de expediente
         cmbExpedientes.setOnAction(e -> {
@@ -5530,7 +5579,7 @@ public class MainController {
         form.setPadding(new Insets(20));
 
         ComboBox<TipoHonorario> cmbTipo = new ComboBox<>();
-        cmbTipo.setItems(FXCollections.observableArrayList(TipoHonorario.values()));
+        cmbTipo.setItems(FXCollections.observableArrayList(TipoHonorario.MONTO_FIJO));
         cmbTipo.setMaxWidth(Double.MAX_VALUE);
 
         TextField txtPorcentaje = new TextField();
@@ -5572,10 +5621,7 @@ public class MainController {
         });
 
         form.getChildren().addAll(
-                new Label("Tipo de Honorario *:"), cmbTipo,
-                new Label("Porcentaje (%) - Solo si es porcentaje:"), txtPorcentaje,
-                new Label("Monto Fijo ($) - Solo si es monto fijo:"), txtMontoFijo,
-                new Label("Monto Calculado ($):"), txtMontoCalculado,
+                new Label("Monto ($) *:"), txtMontoFijo,
                 new Label("Fecha Estimada de Cobro:"), dpFechaEstimada,
                 new Label("Descripción:"), txtDescripcion,
                 new Label("Estado:"), cmbEstado
@@ -5590,18 +5636,16 @@ public class MainController {
             try {
                 Honorario h = honorario != null ? honorario : new Honorario();
                 h.setExpedienteId(expedienteId);
-                h.setTipo(cmbTipo.getValue());
+                h.setTipo(TipoHonorario.MONTO_FIJO);
 
                 if (!txtPorcentaje.getText().isEmpty()) {
                     h.setPorcentaje(Double.parseDouble(txtPorcentaje.getText()));
                 }
 
                 if (!txtMontoFijo.getText().isEmpty()) {
-                    h.setMontoFijo(Double.parseDouble(txtMontoFijo.getText()));
-                }
-
-                if (!txtMontoCalculado.getText().isEmpty()) {
-                    h.setMontoCalculado(Double.parseDouble(txtMontoCalculado.getText()));
+                    double monto = Double.parseDouble(txtMontoFijo.getText());
+                    h.setMontoFijo(monto);
+                    h.setMontoCalculado(monto);
                 }
 
                 h.setFechaEstimada(dpFechaEstimada.getValue());
@@ -5636,7 +5680,12 @@ public class MainController {
         botones.getChildren().addAll(btnGuardar, btnCancelar);
         form.getChildren().add(botones);
 
-        Scene scene = new Scene(new ScrollPane(form), 500, 600);
+        VBox root = new VBox(form);
+        root.setPadding(new Insets(20));
+        root.setStyle("-fx-background-color: white;");
+
+        Scene scene = new Scene(root, 420, 480);
+        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.showAndWait();
     }
@@ -5719,10 +5768,9 @@ public class MainController {
 
         tablaGastos.getColumns().addAll(colFecha, colConcepto, colCategoria, colMonto, colAcciones);
 
-        cmbExpedientes.setOnAction(e -> {
-            Expediente exp = cmbExpedientes.getValue();
-            if (exp != null) {
-                cargarGastosPorExpediente(exp.getId(), listaGastos);
+        cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                cargarGastosPorExpediente(newVal.getId(), listaGastos);
             }
         });
 
