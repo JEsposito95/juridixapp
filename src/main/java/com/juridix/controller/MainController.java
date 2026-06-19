@@ -115,6 +115,11 @@ public class MainController {
     // ComboBox del panel global de Economía (para preseleccionar expediente)
     private ComboBox<Expediente> cmbExpedientesEconomia;
 
+    private Label lblHonorariosPendientes;
+    private Label lblTotalGastosEconomia;
+    private Label lblPagosRecibidos;
+    private Label lblSaldoPendienteEconomia;
+
     private VBox viewAgenda;
     private VBox viewExpedientes;
     private Button navAgenda;
@@ -2855,7 +2860,7 @@ public class MainController {
                     lista.clear();
                     lista.addAll(pagos);
                 }
-
+                actualizarResumenFinanciero();
                 ventana.close();
 
             } catch (NumberFormatException ex) {
@@ -5325,32 +5330,19 @@ public class MainController {
         HBox resumenFinanciero = new HBox(16);
         resumenFinanciero.setAlignment(Pos.CENTER_LEFT);
 
-        try {
-            // Calcular totales globales
-            double totalHonorariosPendientes = calcularTotalHonorariosPendientes();
-            double totalGastos = calcularTotalGastos();
-            double totalPagos = calcularTotalPagos();
-            double saldoPendiente = totalHonorariosPendientes - totalPagos;
+        VBox tarjetaHonorarios = crearTarjetaFinanciera("Honorarios Pendientes", "$0", "#3498db");
+        VBox tarjetaGastos     = crearTarjetaFinanciera("Total Gastos", "$0", "#e74c3c");
+        VBox tarjetaPagos      = crearTarjetaFinanciera("Pagos Recibidos", "$0", "#27ae60");
+        VBox tarjetaSaldo      = crearTarjetaFinanciera("Saldo Pendiente", "$0", "#f39c12");
 
-            VBox tarjetaHonorarios = crearTarjetaFinanciera("Honorarios Pendientes",
-                    formatearMoneda(totalHonorariosPendientes), "#3498db");
+        this.lblHonorariosPendientes  = (Label) tarjetaHonorarios.getChildren().get(1);
+        this.lblTotalGastosEconomia   = (Label) tarjetaGastos.getChildren().get(1);
+        this.lblPagosRecibidos        = (Label) tarjetaPagos.getChildren().get(1);
+        this.lblSaldoPendienteEconomia = (Label) tarjetaSaldo.getChildren().get(1);
 
-            VBox tarjetaGastos = crearTarjetaFinanciera("Total Gastos",
-                    formatearMoneda(totalGastos), "#e74c3c");
+        resumenFinanciero.getChildren().addAll(tarjetaHonorarios, tarjetaGastos, tarjetaPagos, tarjetaSaldo);
 
-            VBox tarjetaPagos = crearTarjetaFinanciera("Pagos Recibidos",
-                    formatearMoneda(totalPagos), "#27ae60");
-
-            VBox tarjetaSaldo = crearTarjetaFinanciera("Saldo Pendiente",
-                    formatearMoneda(saldoPendiente), "#f39c12");
-
-            resumenFinanciero.getChildren().addAll(tarjetaHonorarios, tarjetaGastos, tarjetaPagos, tarjetaSaldo);
-
-        } catch (SQLException e) {
-            Label lblError = new Label("Error al cargar resumen financiero: " + e.getMessage());
-            lblError.setStyle("-fx-text-fill: red;");
-            resumenFinanciero.getChildren().add(lblError);
-        }
+        actualizarResumenFinanciero();
 
         // ========== SELECTOR DE EXPEDIENTE ==========
         HBox selectorExpediente = new HBox(10);
@@ -5376,29 +5368,21 @@ public class MainController {
         // ========== PESTAÑAS DE GESTIÓN ==========
         TabPane tabPaneEconomia = new TabPane();
 
-        // Tab Honorarios
         Tab tabHonorarios = new Tab("💵 Honorarios");
         tabHonorarios.setClosable(false);
-        VBox panelHonorarios = crearPanelHonorarios(cmbExpedientes);
-        tabHonorarios.setContent(panelHonorarios);
+        tabHonorarios.setContent(crearPanelHonorarios(cmbExpedientes));
 
-        // Tab Gastos
         Tab tabGastos = new Tab("💸 Gastos");
         tabGastos.setClosable(false);
-        VBox panelGastos = crearPanelGastos(cmbExpedientes);
-        tabGastos.setContent(panelGastos);
+        tabGastos.setContent(crearPanelGastos(cmbExpedientes));
 
-        // Tab Pagos
         Tab tabPagos = new Tab("💳 Pagos");
         tabPagos.setClosable(false);
-        VBox panelPagos = crearPanelPagos(cmbExpedientes);
-        tabPagos.setContent(panelPagos);
+        tabPagos.setContent(crearPanelPagos(cmbExpedientes));
 
-        // Tab Cuenta Corriente
         Tab tabCuentaCorriente = new Tab("📊 Cuenta Corriente");
         tabCuentaCorriente.setClosable(false);
-        VBox panelCuentaCorriente = crearPanelCuentaCorriente(cmbExpedientes);
-        tabCuentaCorriente.setContent(panelCuentaCorriente);
+        tabCuentaCorriente.setContent(crearPanelCuentaCorriente(cmbExpedientes));
 
         tabPaneEconomia.getTabs().addAll(tabHonorarios, tabGastos, tabPagos, tabCuentaCorriente);
 
@@ -5406,6 +5390,23 @@ public class MainController {
         VBox.setVgrow(tabPaneEconomia, Priority.ALWAYS);
 
         return panel;
+    }
+
+    private void actualizarResumenFinanciero() {
+        if (lblHonorariosPendientes == null) return; // panel aún no creado
+        try {
+            double totalHonorariosPendientes = calcularTotalHonorariosPendientes();
+            double totalGastos = calcularTotalGastos();
+            double totalPagos = calcularTotalPagos();
+            double saldoPendiente = totalHonorariosPendientes - totalPagos;
+
+            lblHonorariosPendientes.setText(formatearMoneda(totalHonorariosPendientes));
+            lblTotalGastosEconomia.setText(formatearMoneda(totalGastos));
+            lblPagosRecibidos.setText(formatearMoneda(totalPagos));
+            lblSaldoPendienteEconomia.setText(formatearMoneda(saldoPendiente));
+        } catch (SQLException e) {
+            mostrarError("Error al actualizar resumen financiero: " + e.getMessage());
+        }
     }
 
     // Tarjeta financiera
@@ -5429,8 +5430,17 @@ public class MainController {
         panel.setPadding(new Insets(15));
         ObservableList<Honorario> listaHonorarios = FXCollections.observableArrayList();
         // Botón nuevo honorario
-        Button btnNuevo = new Button("➕ Nuevo Honorario");
-        btnNuevo.getStyleClass().addAll("button", "button-success");
+        Button btnNuevo = new Button("+ Nuevo Honorario");
+        btnNuevo.getStyleClass().add("btn-primary");
+
+        btnNuevo.setOnAction(e -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                abrirFormularioHonorario(null, exp.getId(), listaHonorarios);
+            } else {
+                mostrarAdvertencia("Seleccione un expediente primero");
+            }
+        });
 
         // Listener para cambio de expediente
         cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -5495,6 +5505,7 @@ public class MainController {
                         honorarioService.marcarComoCobrado(h.getId());
                         mostrarInfo("Honorario marcado como cobrado");
                         cargarHonorariosPorExpediente(cmbExpedientes.getValue().getId(), listaHonorarios);
+                        actualizarResumenFinanciero();
                     } catch (SQLException ex) {
                         mostrarError("Error: " + ex.getMessage());
                     }
@@ -5507,6 +5518,7 @@ public class MainController {
                         try {
                             honorarioService.eliminarHonorario(h.getId());
                             listaHonorarios.remove(h);
+                            actualizarResumenFinanciero();
                             mostrarInfo("Honorario eliminado");
                         } catch (SQLException ex) {
                             mostrarError("Error: " + ex.getMessage());
@@ -5665,6 +5677,7 @@ public class MainController {
                 if (listaTabla != null && expedienteId != null) {
                     cargarHonorariosPorExpediente(expedienteId, listaTabla);
                 }
+                actualizarResumenFinanciero();
                 ventana.close();
 
             } catch (NumberFormatException ex) {
@@ -5755,6 +5768,7 @@ public class MainController {
                         try {
                             gastoService.eliminarGasto(g.getId());
                             listaGastos.remove(g);
+                            actualizarResumenFinanciero();
                             mostrarInfo("Gasto eliminado");
                         } catch (SQLException ex) {
                             mostrarError("Error: " + ex.getMessage());
@@ -5875,7 +5889,7 @@ public class MainController {
                     cargarGastosPorExpediente(expedienteId, listaTabla);
                 }
 
-
+                actualizarResumenFinanciero();
                 ventana.close();
 
             } catch (NumberFormatException ex) {
@@ -5931,71 +5945,12 @@ public class MainController {
 
     private VBox crearPanelPagos(ComboBox<Expediente> cmbExpedientes) {
         VBox panel = new VBox(15);
-        panel.setPadding(new Insets(20));
+        panel.setPadding(new Insets(15));
 
-        // Título
-        Label titulo = new Label("Registrar Pago");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        Button btnNuevo = new Button("+ Registrar Pago");
+        btnNuevo.getStyleClass().add("btn-primary");
 
-        // Formulario de pago
-        GridPane formPago = new GridPane();
-        formPago.setHgap(10);
-        formPago.setVgap(10);
-        formPago.setPadding(new Insets(10));
-
-        // Campo: Monto
-        Label lblMonto = new Label("Monto:");
-        TextField txtMonto = new TextField();
-        txtMonto.setPromptText("Ingrese el monto");
-        txtMonto.setPrefWidth(200);
-
-        // Campo: Fecha
-        Label lblFecha = new Label("Fecha:");
-        DatePicker dpFecha = new DatePicker(LocalDate.now());
-        dpFecha.setPrefWidth(200);
-
-        // Campo: Forma de Pago
-        Label lblFormaPago = new Label("Forma de Pago:");
-        ComboBox<String> cmbFormaPago = new ComboBox<>();
-        cmbFormaPago.getItems().addAll("Efectivo", "Transferencia", "Cheque", "Tarjeta", "Otro");
-        cmbFormaPago.setValue("Efectivo");
-        cmbFormaPago.setPrefWidth(200);
-
-        // Campo: Referencia
-        Label lblReferencia = new Label("Referencia:");
-        TextField txtReferencia = new TextField();
-        txtReferencia.setPromptText("N° de comprobante, transferencia, etc.");
-        txtReferencia.setPrefWidth(200);
-
-        // Campo: Concepto
-        Label lblConcepto = new Label("Concepto:");
-        TextField txtConcepto = new TextField();
-        txtConcepto.setPromptText("Descripción del pago");
-        txtConcepto.setPrefWidth(400);
-
-        // Campo: Observaciones
-        Label lblObservaciones = new Label("Observaciones:");
-        TextArea txtObservaciones = new TextArea();
-        txtObservaciones.setPromptText("Observaciones adicionales");
-        txtObservaciones.setPrefRowCount(3);
-        txtObservaciones.setPrefWidth(400);
-
-        // Agregar al formulario
-        formPago.add(lblMonto, 0, 0);
-        formPago.add(txtMonto, 1, 0);
-        formPago.add(lblFecha, 0, 1);
-        formPago.add(dpFecha, 1, 1);
-        formPago.add(lblFormaPago, 0, 2);
-        formPago.add(cmbFormaPago, 1, 2);
-        formPago.add(lblReferencia, 0, 3);
-        formPago.add(txtReferencia, 1, 3);
-        formPago.add(lblConcepto, 0, 4);
-        formPago.add(txtConcepto, 1, 4);
-        formPago.add(lblObservaciones, 0, 5);
-        formPago.add(txtObservaciones, 1, 5);
-// Tabla de pagos del expediente (DEBE IR ANTES del botón)
         TableView<Pago> tablaPagos = new TableView<>();
-        tablaPagos.setPrefHeight(300);
         tablaPagos.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         tablaPagos.getStyleClass().add("table-view");
 
@@ -6041,7 +5996,9 @@ public class MainController {
                 btnEditar.setOnAction(e -> {
                     Pago p = getTableView().getItems().get(getIndex());
                     Expediente exp = cmbExpedientes.getValue();
-                    abrirFormularioPago(p, exp, tablaPagos.getItems());
+                    abrirFormularioPago(p, exp, null);
+                    cargarTablaPagos(getTableView(), exp.getId());
+                    actualizarResumenFinanciero();
                 });
 
                 btnEliminar.getStyleClass().add("btn-danger");
@@ -6050,8 +6007,9 @@ public class MainController {
                     if (mostrarConfirmacion("¿Eliminar este pago?")) {
                         try {
                             pagoService.eliminarPago(p.getId());
-                            tablaPagos.getItems().remove(p);
+                            getTableView().getItems().remove(p);
                             mostrarInfo("Pago eliminado");
+                            actualizarResumenFinanciero();
                         } catch (SQLException ex) {
                             mostrarError("Error: " + ex.getMessage());
                         }
@@ -6068,68 +6026,6 @@ public class MainController {
 
         tablaPagos.getColumns().addAll(colFecha, colMonto, colFormaPago, colReferencia, colConcepto, colAcciones);
 
-
-
-        // Botón Registrar Pago
-        Button btnRegistrar = new Button("Registrar Pago");
-        btnRegistrar.getStyleClass().add("btn-primary");
-
-
-        btnRegistrar.setOnAction(e -> {
-            try {
-                Expediente expediente = cmbExpedientes.getValue();
-                if (expediente == null) {
-                    mostrarError("Debe seleccionar un expediente");
-                    return;
-                }
-
-                String montoStr = txtMonto.getText().trim();
-                if (montoStr.isEmpty()) {
-                    mostrarError("Debe ingresar el monto");
-                    return;
-                }
-
-                double monto = Double.parseDouble(montoStr);
-                if (monto <= 0) {
-                    mostrarError("El monto debe ser mayor a cero");
-                    return;
-                }
-
-                Pago pago = new Pago();
-                pago.setExpedienteId(expediente.getId());
-                pago.setClienteId(expediente.getClienteId());
-                pago.setMonto(monto);
-                pago.setFecha(dpFecha.getValue());
-                pago.setFormaPago(cmbFormaPago.getValue());
-                pago.setReferencia(txtReferencia.getText().trim());
-                pago.setConcepto(txtConcepto.getText().trim());
-                pago.setObservaciones(txtObservaciones.getText().trim());
-                pago.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
-
-
-                pagoService.crearPago(pago);
-
-                mostrarExito("Pago registrado exitosamente");
-
-                // Limpiar formulario
-                txtMonto.clear();
-                dpFecha.setValue(LocalDate.now());
-                cmbFormaPago.setValue("Efectivo");
-                txtReferencia.clear();
-                txtConcepto.clear();
-                txtObservaciones.clear();
-
-                // Recargar tabla de pagos
-                cargarTablaPagos(tablaPagos, expediente.getId());
-
-            } catch (NumberFormatException ex) {
-                mostrarError("El monto debe ser un número válido");
-            } catch (SQLException ex) {
-                mostrarError("Error al registrar pago: " + ex.getMessage());
-            }
-        });
-
-
         // Listener para cargar pagos cuando se selecciona expediente
         cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
@@ -6137,21 +6033,28 @@ public class MainController {
             }
         });
 
-        Label lblHistorial = new Label("Historial de Pagos");
-        lblHistorial.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        // Wrapper para recargar la tabla actual desde el botón "Nuevo"
+        Runnable recargar = () -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                cargarTablaPagos(tablaPagos, exp.getId());
+                actualizarResumenFinanciero();
+            }
+        };
+        btnNuevo.setOnAction(e -> {
+            Expediente exp = cmbExpedientes.getValue();
+            if (exp != null) {
+                abrirFormularioPago(null, exp, null);
+                recargar.run();
+            } else {
+                mostrarAdvertencia("Seleccione un expediente primero");
+            }
+        });
 
-        panel.getChildren().addAll(titulo, formPago, btnRegistrar, new Separator(),
-                lblHistorial, tablaPagos);
+        panel.getChildren().addAll(btnNuevo, tablaPagos);
+        VBox.setVgrow(tablaPagos, Priority.ALWAYS);
 
-        ScrollPane scroll = new ScrollPane(panel);
-        scroll.setFitToWidth(true);
-        scroll.setFitToHeight(true);
-
-        VBox container = new VBox(scroll);
-        VBox.setVgrow(scroll, Priority.ALWAYS);
-        return container;
-        //return panel;
-        //POSIBLE ERROR!!!!
+        return panel;
     }
 
     private void cargarTablaPagos(TableView<Pago> tabla, Integer expedienteId) {
