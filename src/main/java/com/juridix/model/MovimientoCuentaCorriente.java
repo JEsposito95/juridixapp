@@ -5,17 +5,21 @@ import java.time.LocalDate;
 public class MovimientoCuentaCorriente {
 
     private LocalDate fecha;
-    private String tipo;       // "Honorario", "Gasto", "Pago"
+    private String tipo;        // "Honorario", "Gasto", "Pago"
+    private String expediente;  // número de expediente, o "-" si no se encontró
     private String concepto;
-    private double debe;       // honorarios y gastos
-    private double haber;      // pagos
-    private double saldo;      // saldo acumulado
+    private double debe;        // honorarios y gastos
+    private double haber;       // pagos
+    private double saldo;       // saldo acumulado
 
     public LocalDate getFecha() { return fecha; }
     public void setFecha(LocalDate fecha) { this.fecha = fecha; }
 
     public String getTipo() { return tipo; }
     public void setTipo(String tipo) { this.tipo = tipo; }
+
+    public String getExpediente() { return expediente; }
+    public void setExpediente(String expediente) { this.expediente = expediente; }
 
     public String getConcepto() { return concepto; }
     public void setConcepto(String concepto) { this.concepto = concepto; }

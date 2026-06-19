@@ -5382,7 +5382,7 @@ public class MainController {
 
         Tab tabCuentaCorriente = new Tab("📊 Cuenta Corriente");
         tabCuentaCorriente.setClosable(false);
-        tabCuentaCorriente.setContent(crearPanelCuentaCorriente(cmbExpedientes));
+        tabCuentaCorriente.setContent(crearPanelCuentaCorriente());
 
         tabPaneEconomia.getTabs().addAll(tabHonorarios, tabGastos, tabPagos, tabCuentaCorriente);
 
@@ -6068,166 +6068,179 @@ public class MainController {
 
     // ==================== PANEL CUENTA CORRIENTE ====================
 
-    private VBox crearPanelCuentaCorriente(ComboBox<Expediente> cmbExpedientes) {
+    private VBox crearPanelCuentaCorriente() {
         VBox panel = new VBox(15);
         panel.setPadding(new Insets(20));
 
-        // Título
-        Label titulo = new Label("Estado de Cuenta Corriente");
+        Label titulo = new Label("Cuenta Corriente por Cliente");
         titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
-        // Resumen del expediente
-        HBox resumen = new HBox(20);
-        resumen.setAlignment(Pos.CENTER);
+        // Selector de cliente
+        HBox selector = new HBox(10);
+        selector.setAlignment(Pos.CENTER_LEFT);
+        Label lblCliente = new Label("Cliente:");
+        lblCliente.setStyle("-fx-font-weight: bold;");
+        ComboBox<Cliente> cmbClientes = new ComboBox<>();
+        cmbClientes.setPromptText("Seleccione un cliente...");
+        cmbClientes.setPrefWidth(350);
+        try {
+            cmbClientes.setItems(FXCollections.observableArrayList(clienteService.listarActivos()));
+        } catch (SQLException e) {
+            mostrarError("Error al cargar clientes: " + e.getMessage());
+        }
+        selector.getChildren().addAll(lblCliente, cmbClientes);
 
-        VBox cardHonorarios = crearTarjetaFinanciera("Honorarios", "$0.00", "#3498db");
-        VBox cardGastos = crearTarjetaFinanciera("Gastos", "$0.00", "#e74c3c");
-        VBox cardPagos = crearTarjetaFinanciera("Pagos", "$0.00", "#27ae60");
-        VBox cardSaldo = crearTarjetaFinanciera("Saldo", "$0.00", "#f39c12");
+        // Tarjetas de resumen
+        HBox resumen = new HBox(16);
+        resumen.setAlignment(Pos.CENTER_LEFT);
+
+        VBox cardHonorarios = crearTarjetaFinanciera("Honorarios", "$0", "#3498db");
+        VBox cardGastos = crearTarjetaFinanciera("Gastos", "$0", "#e74c3c");
+        VBox cardPagos = crearTarjetaFinanciera("Pagos", "$0", "#27ae60");
+        VBox cardSaldo = crearTarjetaFinanciera("Saldo Pendiente", "$0", "#f39c12");
 
         resumen.getChildren().addAll(cardHonorarios, cardGastos, cardPagos, cardSaldo);
 
         // Tabla de movimientos
-        TableView<MovimientoCuenta> tablaMovimientos = new TableView<>();
-        tablaMovimientos.setPrefHeight(400);
+        TableView<MovimientoCuentaCorriente> tabla = new TableView<>();
+        tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tabla.getStyleClass().add("table-view");
+        ObservableList<MovimientoCuentaCorriente> lista = FXCollections.observableArrayList();
+        tabla.setItems(lista);
 
-        TableColumn<MovimientoCuenta, LocalDate> colFecha = new TableColumn<>("Fecha");
-        colFecha.setCellValueFactory(data -> new SimpleObjectProperty<>(data.getValue().fecha));
-        colFecha.setPrefWidth(100);
-
-        TableColumn<MovimientoCuenta, String> colTipo = new TableColumn<>("Tipo");
-        colTipo.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().tipo));
-        colTipo.setPrefWidth(100);
-
-        TableColumn<MovimientoCuenta, String> colDescripcion = new TableColumn<>("Descripción");
-        colDescripcion.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().descripcion));
-        colDescripcion.setPrefWidth(300);
-
-        TableColumn<MovimientoCuenta, String> colDebe = new TableColumn<>("Debe");
-        colDebe.setCellValueFactory(data -> {
-            double debe = data.getValue().debe;
-            return new SimpleStringProperty(debe > 0 ? formatearMoneda(debe) : "-");
-        });
-        colDebe.setPrefWidth(100);
-        colDebe.setStyle("-fx-alignment: CENTER-RIGHT;");
-
-        TableColumn<MovimientoCuenta, String> colHaber = new TableColumn<>("Haber");
-        colHaber.setCellValueFactory(data -> {
-            double haber = data.getValue().haber;
-            return new SimpleStringProperty(haber > 0 ? formatearMoneda(haber) : "-");
-        });
-        colHaber.setPrefWidth(100);
-        colHaber.setStyle("-fx-alignment: CENTER-RIGHT;");
-
-        TableColumn<MovimientoCuenta, String> colSaldo = new TableColumn<>("Saldo");
-        colSaldo.setCellValueFactory(data ->
-                new SimpleStringProperty(formatearMoneda(data.getValue().saldo)));
-        colSaldo.setPrefWidth(120);
-        colSaldo.setStyle("-fx-alignment: CENTER-RIGHT;");
-
-        tablaMovimientos.getColumns().addAll(colFecha, colTipo, colDescripcion, colDebe, colHaber, colSaldo);
-
-        // Listener para actualizar cuando cambia el expediente
-        cmbExpedientes.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) {
-                cargarCuentaCorriente(newVal.getId(), resumen, tablaMovimientos,
-                        cardHonorarios, cardGastos, cardPagos, cardSaldo);
+        TableColumn<MovimientoCuentaCorriente, LocalDate> colFecha = new TableColumn<>("Fecha");
+        colFecha.setCellValueFactory(new PropertyValueFactory<>("fecha"));
+        colFecha.setPrefWidth(90);
+        colFecha.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(LocalDate fecha, boolean empty) {
+                super.updateItem(fecha, empty);
+                setText((empty || fecha == null) ? null : fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
             }
         });
 
-        panel.getChildren().addAll(titulo, resumen, new Separator(), tablaMovimientos);
+        TableColumn<MovimientoCuentaCorriente, String> colTipo = new TableColumn<>("Tipo");
+        colTipo.setCellValueFactory(new PropertyValueFactory<>("tipo"));
+        colTipo.setPrefWidth(90);
+
+        TableColumn<MovimientoCuentaCorriente, String> colExpediente = new TableColumn<>("Expediente");
+        colExpediente.setCellValueFactory(new PropertyValueFactory<>("expediente"));
+        colExpediente.setPrefWidth(110);
+
+        TableColumn<MovimientoCuentaCorriente, String> colConcepto = new TableColumn<>("Concepto");
+        colConcepto.setCellValueFactory(new PropertyValueFactory<>("concepto"));
+        colConcepto.setPrefWidth(220);
+
+        TableColumn<MovimientoCuentaCorriente, String> colDebe = new TableColumn<>("Debe");
+        colDebe.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().getDebe() > 0 ? formatearMoneda(data.getValue().getDebe()) : "-"));
+        colDebe.setPrefWidth(100);
+
+        TableColumn<MovimientoCuentaCorriente, String> colHaber = new TableColumn<>("Haber");
+        colHaber.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().getHaber() > 0 ? formatearMoneda(data.getValue().getHaber()) : "-"));
+        colHaber.setPrefWidth(100);
+
+        TableColumn<MovimientoCuentaCorriente, String> colSaldo = new TableColumn<>("Saldo");
+        colSaldo.setCellValueFactory(data -> new SimpleStringProperty(formatearMoneda(data.getValue().getSaldo())));
+        colSaldo.setPrefWidth(110);
+
+        tabla.getColumns().addAll(colFecha, colTipo, colExpediente, colConcepto, colDebe, colHaber, colSaldo);
+
+        cmbClientes.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                try {
+                    List<MovimientoCuentaCorriente> movimientos = construirCuentaCorriente(newVal.getId());
+                    lista.clear();
+                    lista.addAll(movimientos);
+
+                    double totalHonorarios = movimientos.stream()
+                            .filter(m -> m.getTipo().equals("Honorario")).mapToDouble(MovimientoCuentaCorriente::getDebe).sum();
+                    double totalGastos = movimientos.stream()
+                            .filter(m -> m.getTipo().equals("Gasto")).mapToDouble(MovimientoCuentaCorriente::getDebe).sum();
+                    double totalPagos = movimientos.stream()
+                            .mapToDouble(MovimientoCuentaCorriente::getHaber).sum();
+                    double saldoFinal = movimientos.isEmpty() ? 0.0 : movimientos.get(movimientos.size() - 1).getSaldo();
+
+                    actualizarTarjeta(cardHonorarios, formatearMoneda(totalHonorarios));
+                    actualizarTarjeta(cardGastos, formatearMoneda(totalGastos));
+                    actualizarTarjeta(cardPagos, formatearMoneda(totalPagos));
+                    actualizarTarjeta(cardSaldo, formatearMoneda(saldoFinal));
+
+                } catch (SQLException ex) {
+                    mostrarError("Error al cargar cuenta corriente: " + ex.getMessage());
+                }
+            }
+        });
+
+        panel.getChildren().addAll(titulo, selector, resumen, new Separator(), tabla);
+        VBox.setVgrow(tabla, Priority.ALWAYS);
 
         return panel;
     }
 
-    private void cargarCuentaCorriente(Integer expedienteId, HBox resumen,
-                                       TableView<MovimientoCuenta> tabla, VBox cardHonorarios, VBox cardGastos,
-                                       VBox cardPagos, VBox cardSaldo) {
-        try {
-            // Obtener datos
-            List<Honorario> honorarios = honorarioService.listarPorExpediente(expedienteId);
-            List<Gasto> gastos = gastoService.listarPorExpediente(expedienteId);
-            List<Pago> pagos = pagoService.listarPorExpediente(expedienteId);
+    private List<MovimientoCuentaCorriente> construirCuentaCorriente(Integer clienteId) throws SQLException {
+        List<MovimientoCuentaCorriente> movimientos = new ArrayList<>();
 
-            // Calcular totales
-            double totalHonorarios = honorarios.stream()
-                    .mapToDouble(h -> h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0)
-                    .sum();
-
-            double totalGastos = gastos.stream()
-                    .mapToDouble(g -> g.getMonto() != null ? g.getMonto() : 0.0)
-                    .sum();
-
-            double totalPagos = pagos.stream()
-                    .mapToDouble(p -> p.getMonto() != null ? p.getMonto() : 0.0)
-                    .sum();
-
-            double saldo = (totalHonorarios + totalGastos) - totalPagos;
-
-            // Actualizar tarjetas
-            actualizarTarjeta(cardHonorarios, formatearMoneda(totalHonorarios));
-            actualizarTarjeta(cardGastos, formatearMoneda(totalGastos));
-            actualizarTarjeta(cardPagos, formatearMoneda(totalPagos));
-            actualizarTarjeta(cardSaldo, formatearMoneda(saldo));
-
-            // Crear lista de movimientos
-            List<MovimientoCuenta> movimientos = new ArrayList<>();
-            double saldoAcumulado = 0.0;
-
-            // Agregar honorarios
-            for (Honorario h : honorarios) {
-                saldoAcumulado += h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0;
-                movimientos.add(new MovimientoCuenta(
-                        h.getFechaCreacion().toLocalDate(),
-                        "Honorario",
-                        h.getDescripcion(),
-                        h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0,
-                        0.0,
-                        saldoAcumulado
-                ));
-            }
-
-            // Agregar gastos
-            for (Gasto g : gastos) {
-                saldoAcumulado += g.getMonto() != null ? g.getMonto() : 0.0;
-                movimientos.add(new MovimientoCuenta(
-                        g.getFecha(),
-                        "Gasto",
-                        g.getConcepto(),
-                        g.getMonto() != null ? g.getMonto() : 0.0,
-                        0.0,
-                        saldoAcumulado
-                ));
-            }
-
-            // Agregar pagos
-            for (Pago p : pagos) {
-                saldoAcumulado -= p.getMonto() != null ? p.getMonto() : 0.0;
-                movimientos.add(new MovimientoCuenta(
-                        p.getFecha(),
-                        "Pago",
-                        p.getConcepto() != null ? p.getConcepto() : "Pago recibido",
-                        0.0,
-                        p.getMonto() != null ? p.getMonto() : 0.0,
-                        saldoAcumulado
-                ));
-            }
-
-            // Ordenar por fecha
-            movimientos.sort(Comparator.comparing(m -> m.fecha));
-
-            // Recalcular saldo acumulado después de ordenar
-            saldoAcumulado = 0.0;
-            for (MovimientoCuenta m : movimientos) {
-                saldoAcumulado += m.debe - m.haber;
-                m.saldo = saldoAcumulado;
-            }
-
-            tabla.setItems(FXCollections.observableArrayList(movimientos));
-
-        } catch (SQLException ex) {
-            mostrarError("Error al cargar cuenta corriente: " + ex.getMessage());
+        // Mapa de expedientes del cliente para resolver el número rápido
+        ExpedienteDAO expedienteDAO = new ExpedienteDAO();
+        java.util.Map<Integer, String> numeroExpedientePorId = new java.util.HashMap<>();
+        for (Expediente exp : expedienteDAO.listarPorClienteId(clienteId)) {
+            numeroExpedientePorId.put(exp.getId(), exp.getNumero());
         }
+
+        // Honorarios
+        for (Honorario h : honorarioService.listarPorCliente(clienteId)) {
+            MovimientoCuentaCorriente m = new MovimientoCuentaCorriente();
+            LocalDate fecha = h.getFechaEstimada() != null
+                    ? h.getFechaEstimada()
+                    : (h.getFechaCreacion() != null ? h.getFechaCreacion().toLocalDate() : LocalDate.now());
+            m.setFecha(fecha);
+            m.setTipo("Honorario");
+            String desc = h.getDescripcion();
+            m.setConcepto((desc != null && !desc.isBlank()) ? desc : "Honorario");
+            m.setExpediente(numeroExpedientePorId.getOrDefault(h.getExpedienteId(), "-"));
+            m.setDebe(h.getMontoCalculado() != null ? h.getMontoCalculado() : 0.0);
+            m.setHaber(0.0);
+            movimientos.add(m);
+        }
+
+        // Gastos
+        for (Gasto g : gastoService.listarPorCliente(clienteId)) {
+            MovimientoCuentaCorriente m = new MovimientoCuentaCorriente();
+            m.setFecha(g.getFecha());
+            m.setTipo("Gasto");
+            m.setConcepto(g.getConcepto());
+            m.setExpediente(numeroExpedientePorId.getOrDefault(g.getExpedienteId(), "-"));
+            m.setDebe(g.getMonto() != null ? g.getMonto() : 0.0);
+            m.setHaber(0.0);
+            movimientos.add(m);
+        }
+
+        // Pagos
+        for (Pago p : pagoService.listarPorCliente(clienteId)) {
+            MovimientoCuentaCorriente m = new MovimientoCuentaCorriente();
+            m.setFecha(p.getFecha());
+            m.setTipo("Pago");
+            String concepto = p.getConcepto();
+            m.setConcepto((concepto != null && !concepto.isBlank()) ? concepto : "Pago - " + p.getFormaPago());
+            m.setExpediente(numeroExpedientePorId.getOrDefault(p.getExpedienteId(), "-"));
+            m.setDebe(0.0);
+            m.setHaber(p.getMonto() != null ? p.getMonto() : 0.0);
+            movimientos.add(m);
+        }
+
+        // Ordenar cronológicamente
+        movimientos.sort(Comparator.comparing(MovimientoCuentaCorriente::getFecha));
+
+        // Calcular saldo acumulado
+        double saldoAcumulado = 0.0;
+        for (MovimientoCuentaCorriente m : movimientos) {
+            saldoAcumulado += m.getDebe() - m.getHaber();
+            m.setSaldo(saldoAcumulado);
+        }
+
+        return movimientos;
     }
 
     private void actualizarTarjeta(VBox tarjeta, String nuevoValor) {
