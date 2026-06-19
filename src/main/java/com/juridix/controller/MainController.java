@@ -5695,8 +5695,8 @@ public class MainController {
         panel.setPadding(new Insets(15));
         ObservableList<Gasto> listaGastos = FXCollections.observableArrayList();
 
-        Button btnNuevo = new Button("➕ Nuevo Gasto");
-        btnNuevo.getStyleClass().add("btn-danger");
+        Button btnNuevo = new Button("+ Nuevo Gasto");
+        btnNuevo.getStyleClass().add("btn-primary");
         btnNuevo.setOnAction(e -> {
             Expediente exp = cmbExpedientes.getValue();
             if (exp != null) {
@@ -5707,12 +5707,20 @@ public class MainController {
         });
 
         TableView<Gasto> tablaGastos = new TableView<>();
-
         tablaGastos.setItems(listaGastos);
+        tablaGastos.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tablaGastos.getStyleClass().add("table-view");
 
         TableColumn<Gasto, LocalDate> colFecha = new TableColumn<>("Fecha");
         colFecha.setCellValueFactory(new PropertyValueFactory<>("fecha"));
         colFecha.setPrefWidth(120);
+        colFecha.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(LocalDate fecha, boolean empty) {
+                super.updateItem(fecha, empty);
+                setText((empty || fecha == null) ? null : fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            }
+        });
 
         TableColumn<Gasto, String> colConcepto = new TableColumn<>("Concepto");
         colConcepto.setCellValueFactory(new PropertyValueFactory<>("concepto"));
@@ -5728,12 +5736,13 @@ public class MainController {
         colMonto.setPrefWidth(120);
 
         TableColumn<Gasto, Void> colAcciones = new TableColumn<>("Acciones");
-        colAcciones.setPrefWidth(120);
+        colAcciones.setPrefWidth(150);
         colAcciones.setCellFactory(param -> new TableCell<>() {
-            private final Button btnEditar = new Button("✏️");
-            private final Button btnEliminar = new Button("🗑️");
+            private final Button btnEditar = new Button("Editar");
+            private final Button btnEliminar = new Button("Eliminar");
 
             {
+                btnEditar.getStyleClass().add("btn-ghost");
                 btnEditar.setOnAction(e -> {
                     Gasto g = getTableView().getItems().get(getIndex());
                     abrirFormularioGasto(g, g.getExpedienteId(), listaGastos);
@@ -5987,10 +5996,19 @@ public class MainController {
 // Tabla de pagos del expediente (DEBE IR ANTES del botón)
         TableView<Pago> tablaPagos = new TableView<>();
         tablaPagos.setPrefHeight(300);
+        tablaPagos.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tablaPagos.getStyleClass().add("table-view");
 
         TableColumn<Pago, LocalDate> colFecha = new TableColumn<>("Fecha");
         colFecha.setCellValueFactory(data -> new SimpleObjectProperty<>(data.getValue().getFecha()));
         colFecha.setPrefWidth(100);
+        colFecha.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(LocalDate fecha, boolean empty) {
+                super.updateItem(fecha, empty);
+                setText((empty || fecha == null) ? null : fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            }
+        });
 
         TableColumn<Pago, String> colMonto = new TableColumn<>("Monto");
         colMonto.setCellValueFactory(data ->
@@ -6013,12 +6031,13 @@ public class MainController {
         colConcepto.setPrefWidth(200);
 
         TableColumn<Pago, Void> colAcciones = new TableColumn<>("Acciones");
-        colAcciones.setPrefWidth(120);
+        colAcciones.setPrefWidth(150);
         colAcciones.setCellFactory(param -> new TableCell<>() {
-            private final Button btnEditar = new Button("✏️");
-            private final Button btnEliminar = new Button("🗑️");
+            private final Button btnEditar = new Button("Editar");
+            private final Button btnEliminar = new Button("Eliminar");
 
             {
+                btnEditar.getStyleClass().add("btn-ghost");
                 btnEditar.setOnAction(e -> {
                     Pago p = getTableView().getItems().get(getIndex());
                     Expediente exp = cmbExpedientes.getValue();
@@ -6052,8 +6071,8 @@ public class MainController {
 
 
         // Botón Registrar Pago
-        Button btnRegistrar = new Button("💰 Registrar Pago");
-        btnRegistrar.getStyleClass().addAll("button", "button-success");
+        Button btnRegistrar = new Button("Registrar Pago");
+        btnRegistrar.getStyleClass().add("btn-primary");
 
 
         btnRegistrar.setOnAction(e -> {
