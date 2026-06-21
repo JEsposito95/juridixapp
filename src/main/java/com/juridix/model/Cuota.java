@@ -109,6 +109,22 @@ public class Cuota {
         return montoTotalAcordado - montoPagado;
     }
 
+    public Integer getCuotasPagadas() {
+        if (montoPorCuota == null || montoPorCuota == 0 || montoPagado == null) {
+            return 0;
+        }
+        return (int) Math.floor(montoPagado / montoPorCuota);
+    }
+
+    public Integer getCuotasAdeudadas() {
+        if (cantidadCuotasPlanificadas == null) {
+            return null; // no se definió un plan con cantidad fija de cuotas
+        }
+        int pagadas = getCuotasPagadas();
+        int adeudadas = cantidadCuotasPlanificadas - pagadas;
+        return Math.max(adeudadas, 0);
+    }
+
     public Double getPorcentajePagado() {
         if (montoTotalAcordado == null || montoTotalAcordado == 0) {
             return 0.0;

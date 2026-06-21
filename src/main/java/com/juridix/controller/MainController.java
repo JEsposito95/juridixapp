@@ -306,6 +306,7 @@ public class MainController {
         navAgenda = crearNavItem("▦  Agenda");
         Button btnAgenda = navAgenda;
         Button btnEconomia = crearNavItem("◈  Economía");
+        Button btnHerramientas = crearNavItem("🛠  Herramientas");
 
         // Área de contenido
         contentArea = new StackPane();
@@ -319,14 +320,15 @@ public class MainController {
         VBox viewClientes    = crearPanelClientes();
         viewAgenda = crearPanelAgenda();
         this.viewEconomia    = crearPanelEconomia();
+        VBox viewHerramientas = crearPanelHerramientas();
 
         contentArea.getChildren().add(viewDashboard);
 
         // Acción de navegación
         Runnable[] acciones = new Runnable[5];
-        this.botonesNav = new Button[]{btnDashboard, btnExpedientes, btnClientes, btnAgenda, btnEconomia};
+        this.botonesNav = new Button[]{btnDashboard, btnExpedientes, btnClientes, btnAgenda, btnEconomia, btnHerramientas};
         Button[] botones = this.botonesNav;
-        VBox[] vistas = {viewDashboard, viewExpedientes, viewClientes, viewAgenda, this.viewEconomia};
+        VBox[] vistas = {viewDashboard, viewExpedientes, viewClientes, viewAgenda, this.viewEconomia, viewHerramientas};
 
         for (int i = 0; i < botones.length; i++) {
             final int idx = i;
@@ -358,7 +360,7 @@ public class MainController {
         }
 
         sidebar.getChildren().addAll(logoArea, lblPrincipal, btnDashboard,
-                lblGestion, btnExpedientes, btnClientes, btnAgenda, btnEconomia);
+                lblGestion, btnExpedientes, btnClientes, btnAgenda, btnEconomia, btnHerramientas);
 
         // Footer usuario
         Region spacerSidebar = new Region();
@@ -1813,52 +1815,81 @@ public class MainController {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(10));
 
-        // Dos botones separados
-        HBox botonesHeader = new HBox(10);
-        botonesHeader.setAlignment(Pos.CENTER_LEFT);
-
         Button btnNuevoPlan = new Button("📋 Nuevo Plan de Cuotas");
         btnNuevoPlan.getStyleClass().addAll("button", "button-success");
 
-        Button btnRegistrarCuota = new Button("💵 Registrar Cuota Individual");
-        btnRegistrarCuota.getStyleClass().addAll("button", "button-info");
-
-        botonesHeader.getChildren().addAll(btnNuevoPlan, btnRegistrarCuota);
-
         // Tabla de cuotas
         TableView<Cuota> tabla = new TableView<>();
-        tabla.setPrefHeight(300); // ✅ AGREGAR ESTA LÍNEA
-        tabla.setMaxHeight(400);  // ✅ AGREGAR ESTA LÍNEA
+        tabla.setPrefHeight(260);
         ObservableList<Cuota> lista = FXCollections.observableArrayList();
         tabla.setItems(lista);
 
         TableColumn<Cuota, LocalDate> colFecha = new TableColumn<>("Fecha Acuerdo");
         colFecha.setCellValueFactory(new PropertyValueFactory<>("fechaAcuerdo"));
-        colFecha.setPrefWidth(120);
+        colFecha.setPrefWidth(110);
+        colFecha.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(LocalDate fecha, boolean empty) {
+                super.updateItem(fecha, empty);
+                setText((empty || fecha == null) ? null : fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            }
+        });
 
-        TableColumn<Cuota, Double> colTotal = new TableColumn<>("Monto Total");
-        colTotal.setCellValueFactory(new PropertyValueFactory<>("montoTotalAcordado"));
-        colTotal.setPrefWidth(120);
+        TableColumn<Cuota, String> colTotal = new TableColumn<>("Monto Total");
+        colTotal.setCellValueFactory(cellData ->
+                new SimpleStringProperty(formatearMoneda(cellData.getValue().getMontoTotalAcordado())));
+        colTotal.setPrefWidth(110);
 
-        TableColumn<Cuota, Double> colPagado = new TableColumn<>("Pagado");
-        colPagado.setCellValueFactory(new PropertyValueFactory<>("montoPagado"));
-        colPagado.setPrefWidth(120);
+        TableColumn<Cuota, String> colPagado = new TableColumn<>("Pagado");
+        colPagado.setCellValueFactory(cellData ->
+                new SimpleStringProperty(formatearMoneda(cellData.getValue().getMontoPagado())));
+        colPagado.setPrefWidth(110);
 
         TableColumn<Cuota, String> colPendiente = new TableColumn<>("Pendiente");
         colPendiente.setCellValueFactory(cellData ->
                 new SimpleStringProperty(formatearMoneda(cellData.getValue().getSaldoPendiente())));
-        colPendiente.setPrefWidth(120);
+        colPendiente.setPrefWidth(110);
+
+        TableColumn<Cuota, String> colCuotasPagadas = new TableColumn<>("Cuotas Pagadas");
+        colCuotasPagadas.setCellValueFactory(cellData -> {
+            Cuota c = cellData.getValue();
+            String texto = (c.getCantidadCuotasPlanificadas() != null)
+                    ? c.getCuotasPagadas() + " / " + c.getCantidadCuotasPlanificadas()
+                    : c.getCuotasPagadas() + " / -";
+            return new SimpleStringProperty(texto);
+        });
+        colCuotasPagadas.setPrefWidth(110);
+
+        TableColumn<Cuota, String> colCuotasAdeudadas = new TableColumn<>("Cuotas Adeudadas");
+        colCuotasAdeudadas.setCellValueFactory(cellData -> {
+            Integer adeudadas = cellData.getValue().getCuotasAdeudadas();
+            return new SimpleStringProperty(adeudadas != null ? String.valueOf(adeudadas) : "-");
+        });
+        colCuotasAdeudadas.setPrefWidth(120);
 
         TableColumn<Cuota, String> colProgreso = new TableColumn<>("Progreso");
         colProgreso.setCellValueFactory(cellData ->
                 new SimpleStringProperty(String.format("%.1f%%", cellData.getValue().getPorcentajePagado())));
-        colProgreso.setPrefWidth(100);
+        colProgreso.setPrefWidth(90);
 
         TableColumn<Cuota, String> colEstado = new TableColumn<>("Estado");
         colEstado.setCellValueFactory(new PropertyValueFactory<>("estado"));
         colEstado.setPrefWidth(100);
 
-        tabla.getColumns().addAll(colFecha, colTotal, colPagado, colPendiente, colProgreso, colEstado);
+        tabla.getColumns().addAll(colFecha, colTotal, colPagado, colPendiente,
+                colCuotasPagadas, colCuotasAdeudadas, colProgreso, colEstado);
+        tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tabla.getStyleClass().add("table-view");
+
+        // Doble clic para abrir el detalle del plan
+        tabla.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                Cuota sel = tabla.getSelectionModel().getSelectedItem();
+                if (sel != null) {
+                    abrirDetallePlanCuotas(sel, lista);
+                }
+            }
+        });
 
         // Cargar cuotas
         try {
@@ -1868,21 +1899,8 @@ public class MainController {
             mostrarError("Error: " + e.getMessage());
         }
 
-        // Evento botón nuevo plan de cuotas
         btnNuevoPlan.setOnAction(e -> {
             abrirFormularioNuevoPlanCuotas();
-            try {
-                List<Cuota> cuotas = cuotaService.listarCuotasPorExpediente(expedienteSeleccionado.getId());
-                lista.clear();
-                lista.addAll(cuotas);
-            } catch (SQLException ex) {
-                mostrarError("Error: " + ex.getMessage());
-            }
-        });
-
-        // Evento botón registrar cuota individual
-        btnRegistrarCuota.setOnAction(e -> {
-            abrirFormularioCuotaIndividual();
             try {
                 List<Cuota> cuotas = cuotaService.listarCuotasPorExpediente(expedienteSeleccionado.getId());
                 lista.clear();
@@ -1897,13 +1915,13 @@ public class MainController {
         botones.setAlignment(Pos.CENTER);
         botones.setPadding(new Insets(10, 0, 0, 0));
 
-        Button btnVerPagos = new Button("👁️ Ver Pagos");
-        btnVerPagos.setOnAction(e -> {
+        Button btnVerDetalle = new Button("👁️ Ver Detalle / Pagos");
+        btnVerDetalle.setOnAction(e -> {
             Cuota sel = tabla.getSelectionModel().getSelectedItem();
             if (sel != null) {
-                abrirVentanaPagosCuota(sel, lista);
+                abrirDetallePlanCuotas(sel, lista);
             } else {
-                mostrarAdvertencia("Seleccione una cuota");
+                mostrarAdvertencia("Seleccione un plan de cuotas");
             }
         });
 
@@ -1914,26 +1932,26 @@ public class MainController {
             if (sel != null) {
                 Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
                 confirmacion.setTitle("Confirmar");
-                confirmacion.setHeaderText("¿Eliminar cuota?");
-                confirmacion.setContentText("Se eliminarán también todos los pagos asociados");
+                confirmacion.setHeaderText("¿Eliminar plan de cuotas?");
+                confirmacion.setContentText("Se eliminarán también todas las entregas de dinero asociadas");
 
                 if (confirmacion.showAndWait().get() == ButtonType.OK) {
                     try {
                         cuotaService.eliminarCuota(sel.getId());
                         lista.remove(sel);
-                        mostrarInfo("Cuota eliminada");
+                        mostrarInfo("Plan eliminado");
                     } catch (SQLException ex) {
                         mostrarError("Error: " + ex.getMessage());
                     }
                 }
             } else {
-                mostrarAdvertencia("Seleccione una cuota");
+                mostrarAdvertencia("Seleccione un plan de cuotas");
             }
         });
 
-        botones.getChildren().addAll(btnVerPagos, btnEliminar);
+        botones.getChildren().addAll(btnVerDetalle, btnEliminar);
 
-        panel.getChildren().addAll(botonesHeader, tabla, botones);
+        panel.getChildren().addAll(btnNuevoPlan, tabla, botones);
         VBox.setVgrow(tabla, Priority.ALWAYS);
 
         return panel;
@@ -1957,24 +1975,36 @@ public class MainController {
 
         grid.add(new Label("Monto Total Acordado *:"), 0, row);
         TextField txtTotal = new TextField();
-        txtTotal.setPromptText("Ej: 50000");
+        txtTotal.setPromptText("Ej: 4000000");
         grid.add(txtTotal, 1, row++);
 
-        grid.add(new Label("Cantidad de Cuotas:"), 0, row);
+        grid.add(new Label("Cantidad de Cuotas *:"), 0, row);
         TextField txtCantidad = new TextField();
-        txtCantidad.setPromptText("Ej: 10");
+        txtCantidad.setPromptText("Ej: 12");
         grid.add(txtCantidad, 1, row++);
 
         grid.add(new Label("Monto por Cuota:"), 0, row);
-        TextField txtMontoCuota = new TextField();
-        txtMontoCuota.setPromptText("Ej: 5000");
-        grid.add(txtMontoCuota, 1, row++);
+        Label lblMontoPorCuota = new Label("—");
+        lblMontoPorCuota.setStyle("-fx-font-weight: bold; -fx-text-fill: #185FA5;");
+        grid.add(lblMontoPorCuota, 1, row++);
 
-        Label lblInfo = new Label("ℹ️ Plan de pagos con cuotas. Los pagos pueden variar en monto.");
-        lblInfo.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
-        lblInfo.setWrapText(true);
-        lblInfo.setMaxWidth(350);
-        grid.add(lblInfo, 0, row++, 2, 1);
+        // Recalcular en vivo
+        Runnable recalcular = () -> {
+            try {
+                double total = Double.parseDouble(txtTotal.getText().trim());
+                int cantidad = Integer.parseInt(txtCantidad.getText().trim());
+                if (cantidad > 0) {
+                    double porCuota = total / cantidad;
+                    lblMontoPorCuota.setText(formatearMoneda(porCuota) + " por cuota");
+                } else {
+                    lblMontoPorCuota.setText("—");
+                }
+            } catch (NumberFormatException ex) {
+                lblMontoPorCuota.setText("—");
+            }
+        };
+        txtTotal.textProperty().addListener((obs, oldV, newV) -> recalcular.run());
+        txtCantidad.textProperty().addListener((obs, oldV, newV) -> recalcular.run());
 
         grid.add(new Label("Observaciones:"), 0, row);
         TextArea txtObs = new TextArea();
@@ -1990,24 +2020,25 @@ public class MainController {
         btnGuardar.getStyleClass().addAll("button", "button-success");
         btnGuardar.setOnAction(e -> {
             try {
-                if (txtTotal.getText().trim().isEmpty()) {
-                    mostrarAdvertencia("El monto total es obligatorio");
+                if (txtTotal.getText().trim().isEmpty() || txtCantidad.getText().trim().isEmpty()) {
+                    mostrarAdvertencia("El monto total y la cantidad de cuotas son obligatorios");
+                    return;
+                }
+
+                double total = Double.parseDouble(txtTotal.getText().trim());
+                int cantidad = Integer.parseInt(txtCantidad.getText().trim());
+
+                if (cantidad <= 0) {
+                    mostrarAdvertencia("La cantidad de cuotas debe ser mayor a cero");
                     return;
                 }
 
                 Cuota cuota = new Cuota();
                 cuota.setExpedienteId(expedienteSeleccionado.getId());
                 cuota.setFechaAcuerdo(dpFecha.getValue());
-                cuota.setMontoTotalAcordado(Double.parseDouble(txtTotal.getText().trim()));
-
-                if (!txtCantidad.getText().trim().isEmpty()) {
-                    cuota.setCantidadCuotasPlanificadas(Integer.parseInt(txtCantidad.getText().trim()));
-                }
-
-                if (!txtMontoCuota.getText().trim().isEmpty()) {
-                    cuota.setMontoPorCuota(Double.parseDouble(txtMontoCuota.getText().trim()));
-                }
-
+                cuota.setMontoTotalAcordado(total);
+                cuota.setCantidadCuotasPlanificadas(cantidad);
+                cuota.setMontoPorCuota(total / cantidad);
                 cuota.setObservaciones(txtObs.getText().trim());
                 cuota.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
 
@@ -2016,7 +2047,7 @@ public class MainController {
                 ventana.close();
 
             } catch (NumberFormatException ex) {
-                mostrarError("Los montos deben ser números válidos");
+                mostrarError("El monto y la cantidad deben ser números válidos");
             } catch (Exception ex) {
                 mostrarError("Error: " + ex.getMessage());
             }
@@ -2036,332 +2067,190 @@ public class MainController {
         );
         root.setPadding(new Insets(20));
 
-        Scene scene = new Scene(root);
+        Scene scene = new Scene(root, 420, 420);
         scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.showAndWait();
     }
-
-    private void abrirFormularioCuotaIndividual() {
+    private void abrirDetallePlanCuotas(Cuota cuota, ObservableList<Cuota> listaPlanes) {
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
-        ventana.setTitle("Registrar Cuota Individual");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-
-        int row = 0;
-
-        grid.add(new Label("Fecha *:"), 0, row);
-        DatePicker dpFecha = new DatePicker(LocalDate.now());
-        grid.add(dpFecha, 1, row++);
-
-        grid.add(new Label("Monto *:"), 0, row);
-        TextField txtMonto = new TextField();
-        txtMonto.setPromptText("Ej: 10000");
-        grid.add(txtMonto, 1, row++);
-
-        Label lblInfo = new Label("ℹ️ Registro de una única cuota sin plan de pagos");
-        lblInfo.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
-        lblInfo.setWrapText(true);
-        lblInfo.setMaxWidth(350);
-        grid.add(lblInfo, 0, row++, 2, 1);
-
-        grid.add(new Label("Observaciones:"), 0, row);
-        TextArea txtObs = new TextArea();
-        txtObs.setPrefRowCount(2);
-        grid.add(txtObs, 1, row++);
-
-        HBox botones = new HBox(10);
-        botones.setAlignment(Pos.CENTER);
-        botones.setPadding(new Insets(15, 0, 0, 0));
-
-        Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.getStyleClass().addAll("button", "button-success");
-        btnGuardar.setOnAction(e -> {
-            try {
-                if (txtMonto.getText().trim().isEmpty()) {
-                    mostrarAdvertencia("El monto es obligatorio");
-                    return;
-                }
-
-                Cuota cuota = new Cuota();
-                cuota.setExpedienteId(expedienteSeleccionado.getId());
-                cuota.setFechaAcuerdo(dpFecha.getValue());
-                cuota.setMontoTotalAcordado(Double.parseDouble(txtMonto.getText().trim()));
-                cuota.setMontoPagado(Double.parseDouble(txtMonto.getText().trim())); // Ya pagada
-                cuota.setEstado("COMPLETADO"); // Cuota individual ya está completa
-                cuota.setObservaciones(txtObs.getText().trim());
-                cuota.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
-
-                cuotaService.crearCuota(cuota);
-                mostrarInfo("Cuota registrada correctamente");
-                ventana.close();
-
-            } catch (NumberFormatException ex) {
-                mostrarError("El monto debe ser un número válido");
-            } catch (Exception ex) {
-                mostrarError("Error: " + ex.getMessage());
-            }
-        });
-
-        Button btnCancelar = new Button("❌ Cancelar");
-        btnCancelar.setOnAction(e -> ventana.close());
-
-        botones.getChildren().addAll(btnGuardar, btnCancelar);
-
-        VBox root = new VBox(15);
-        root.getChildren().addAll(
-                new Label("Registrar Cuota Individual"),
-                new Separator(),
-                grid,
-                botones
-        );
-        root.setPadding(new Insets(20));
-
-        Scene scene = new Scene(root);
-        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
-        ventana.setScene(scene);
-        ventana.showAndWait();
-    }
-
-
-    private void abrirFormularioNuevaCuota() {
-        Stage ventana = new Stage();
-        ventana.initModality(Modality.APPLICATION_MODAL);
-        ventana.setTitle("Nueva Cuota / Plan de Pago");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-
-        int row = 0;
-
-        // Fecha Acuerdo
-        grid.add(new Label("Fecha de Acuerdo *:"), 0, row);
-        DatePicker dpFecha = new DatePicker(LocalDate.now());
-        grid.add(dpFecha, 1, row++);
-
-        // Monto Total
-        grid.add(new Label("Monto Total Acordado *:"), 0, row);
-        TextField txtTotal = new TextField();
-        txtTotal.setPromptText("Ej: 50000");
-        grid.add(txtTotal, 1, row++);
-
-        // Cantidad de Cuotas (opcional)
-        grid.add(new Label("Cantidad de Cuotas:"), 0, row);
-        TextField txtCantidad = new TextField();
-        txtCantidad.setPromptText("Opcional - Ej: 10");
-        grid.add(txtCantidad, 1, row++);
-
-        // Monto por Cuota (opcional)
-        grid.add(new Label("Monto por Cuota:"), 0, row);
-        TextField txtMontoCuota = new TextField();
-        txtMontoCuota.setPromptText("Opcional - Ej: 5000");
-        grid.add(txtMontoCuota, 1, row++);
-
-        Label lblInfo = new Label("ℹ️ Los pagos pueden ser de montos variables, no necesariamente fijos");
-        lblInfo.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
-        lblInfo.setWrapText(true);
-        lblInfo.setMaxWidth(350);
-        grid.add(lblInfo, 0, row++, 2, 1);
-
-        // Observaciones
-        grid.add(new Label("Observaciones:"), 0, row);
-        TextArea txtObs = new TextArea();
-        txtObs.setPrefRowCount(3);
-        txtObs.setPromptText("Condiciones del acuerdo, forma de pago, etc.");
-        grid.add(txtObs, 1, row++);
-
-        // Botones
-        HBox botones = new HBox(10);
-        botones.setAlignment(Pos.CENTER);
-        botones.setPadding(new Insets(15, 0, 0, 0));
-
-        Button btnGuardar = new Button("💾 Guardar");
-        btnGuardar.getStyleClass().addAll("button", "button-success");
-        btnGuardar.setOnAction(e -> {
-            try {
-                if (txtTotal.getText().trim().isEmpty()) {
-                    mostrarAdvertencia("El monto total es obligatorio");
-                    return;
-                }
-
-                Cuota cuota = new Cuota();
-                cuota.setExpedienteId(expedienteSeleccionado.getId());
-                cuota.setFechaAcuerdo(dpFecha.getValue());
-                cuota.setMontoTotalAcordado(Double.parseDouble(txtTotal.getText().trim()));
-
-                if (!txtCantidad.getText().trim().isEmpty()) {
-                    cuota.setCantidadCuotasPlanificadas(Integer.parseInt(txtCantidad.getText().trim()));
-                }
-
-                if (!txtMontoCuota.getText().trim().isEmpty()) {
-                    cuota.setMontoPorCuota(Double.parseDouble(txtMontoCuota.getText().trim()));
-                }
-
-                cuota.setObservaciones(txtObs.getText().trim());
-                cuota.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
-
-                cuotaService.crearCuota(cuota);
-                mostrarInfo("Cuota / Plan de pago creado correctamente");
-                ventana.close();
-
-            } catch (NumberFormatException ex) {
-                mostrarError("Los montos deben ser números válidos");
-            } catch (Exception ex) {
-                mostrarError("Error: " + ex.getMessage());
-            }
-        });
-
-        Button btnCancelar = new Button("❌ Cancelar");
-        btnCancelar.setOnAction(e -> ventana.close());
-
-        botones.getChildren().addAll(btnGuardar, btnCancelar);
-
-        VBox root = new VBox(15);
-        root.getChildren().addAll(
-                new Label("Crear Plan de Cuotas / Acuerdo de Pago"),
-                new Separator(),
-                grid,
-                botones
-        );
-        root.setPadding(new Insets(20));
-
-        Scene scene = new Scene(root);
-        scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
-        ventana.setScene(scene);
-        ventana.showAndWait();
-    }
-
-    private void abrirVentanaPagosCuota(Cuota cuota, ObservableList<Cuota> listaCuotas) {
-        Stage ventana = new Stage();
-        ventana.initModality(Modality.APPLICATION_MODAL);
-        ventana.setTitle("Pagos de Cuota");
+        ventana.setTitle("Plan de Cuotas - " + formatearMoneda(cuota.getMontoTotalAcordado()));
 
         BorderPane root = new BorderPane();
-        root.setPadding(new Insets(15));
 
-        // Header con info de la cuota
-        VBox header = new VBox(5);
-        header.setPadding(new Insets(10));
-        header.setStyle("-fx-background-color: #8e44ad;");
+        // ===== HEADER: resumen del plan =====
+        VBox header = new VBox(10);
+        header.setPadding(new Insets(15));
+        header.setStyle("-fx-background-color: #0C447C;");
 
-        Label lblInfo = new Label(String.format("Cuota: $%.2f | Pagado: $%.2f | Pendiente: $%.2f",
-                cuota.getMontoTotalAcordado(), cuota.getMontoPagado(), cuota.getSaldoPendiente()));
-        lblInfo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white;");
+        Label lblTotal = new Label();
+        lblTotal.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: white;");
 
-        Label lblProgreso = new Label(String.format("Progreso: %.1f%%", cuota.getPorcentajePagado()));
-        lblProgreso.setStyle("-fx-text-fill: white;");
+        Label lblDetalle = new Label();
+        lblDetalle.setStyle("-fx-text-fill: #B5D4F4;");
 
-        header.getChildren().addAll(lblInfo, lblProgreso);
+        Label lblCuotas = new Label();
+        lblCuotas.setStyle("-fx-text-fill: #B5D4F4;");
+
+        Runnable actualizarHeader = () -> {
+            lblTotal.setText("Total: " + formatearMoneda(cuota.getMontoTotalAcordado())
+                    + "   |   Pagado: " + formatearMoneda(cuota.getMontoPagado())
+                    + "   |   Pendiente: " + formatearMoneda(cuota.getSaldoPendiente()));
+
+            String montoPorCuotaTexto = cuota.getMontoPorCuota() != null
+                    ? formatearMoneda(cuota.getMontoPorCuota()) + " por cuota"
+                    : "—";
+            lblDetalle.setText(montoPorCuotaTexto);
+
+            String cuotasTexto = cuota.getCantidadCuotasPlanificadas() != null
+                    ? "Cuotas pagadas: " + cuota.getCuotasPagadas() + " de " + cuota.getCantidadCuotasPlanificadas()
+                    + "   (faltan " + cuota.getCuotasAdeudadas() + ")"
+                    : "";
+            lblCuotas.setText(cuotasTexto);
+        };
+        actualizarHeader.run();
+
+        header.getChildren().addAll(lblTotal, lblDetalle, lblCuotas);
         root.setTop(header);
 
-        // Tabla de pagos
+        // ===== CENTER: historial de entregas de dinero =====
         TableView<PagoCuota> tabla = new TableView<>();
+        tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tabla.getStyleClass().add("table-view");
         ObservableList<PagoCuota> listaPagos = FXCollections.observableArrayList();
         tabla.setItems(listaPagos);
 
         TableColumn<PagoCuota, LocalDate> colFecha = new TableColumn<>("Fecha");
         colFecha.setCellValueFactory(new PropertyValueFactory<>("fechaPago"));
         colFecha.setPrefWidth(100);
+        colFecha.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(LocalDate fecha, boolean empty) {
+                super.updateItem(fecha, empty);
+                setText((empty || fecha == null) ? null : fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            }
+        });
 
-        TableColumn<PagoCuota, Double> colMonto = new TableColumn<>("Monto");
-        colMonto.setCellValueFactory(new PropertyValueFactory<>("monto"));
+        TableColumn<PagoCuota, String> colMonto = new TableColumn<>("Monto");
+        colMonto.setCellValueFactory(data -> new SimpleStringProperty(formatearMoneda(data.getValue().getMonto())));
         colMonto.setPrefWidth(100);
 
         TableColumn<PagoCuota, String> colForma = new TableColumn<>("Forma de Pago");
         colForma.setCellValueFactory(new PropertyValueFactory<>("formaPago"));
         colForma.setPrefWidth(120);
 
-        TableColumn<PagoCuota, Integer> colNumero = new TableColumn<>("Nro. Cuota");
-        colNumero.setCellValueFactory(new PropertyValueFactory<>("numeroCuota"));
-        colNumero.setPrefWidth(80);
-
         TableColumn<PagoCuota, String> colRef = new TableColumn<>("Referencia");
         colRef.setCellValueFactory(new PropertyValueFactory<>("referencia"));
         colRef.setPrefWidth(150);
 
-        tabla.getColumns().addAll(colFecha, colMonto, colForma, colNumero, colRef);
+        TableColumn<PagoCuota, Void> colAcciones = new TableColumn<>("Acciones");
+        colAcciones.setPrefWidth(100);
+        colAcciones.setCellFactory(param -> new TableCell<>() {
+            private final Button btnEliminar = new Button("Eliminar");
+            {
+                btnEliminar.getStyleClass().add("btn-danger");
+                btnEliminar.setOnAction(e -> {
+                    PagoCuota p = getTableView().getItems().get(getIndex());
+                    if (mostrarConfirmacion("¿Eliminar esta entrega de dinero?")) {
+                        try {
+                            cuotaService.eliminarPagoCuota(p.getId(), p.getCuotaId(), p.getMonto());
+                            listaPagos.remove(p);
 
-        // Cargar pagos
+                            Optional<Cuota> actualizada = cuotaService.buscarCuotaPorId(cuota.getId());
+                            if (actualizada.isPresent()) {
+                                copiarEstadoCuota(actualizada.get(), cuota);
+                                actualizarHeader.run();
+                                refrescarListaPlanes(listaPlanes, cuota);
+                            }
+                            mostrarInfo("Entrega eliminada");
+                        } catch (SQLException ex) {
+                            mostrarError("Error: " + ex.getMessage());
+                        }
+                    }
+                });
+            }
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : btnEliminar);
+            }
+        });
+
+        tabla.getColumns().addAll(colFecha, colMonto, colForma, colRef, colAcciones);
+
         try {
-            List<PagoCuota> pagos = cuotaService.listarPagosDeCuota(cuota.getId());
-            listaPagos.addAll(pagos);
+            listaPagos.addAll(cuotaService.listarPagosDeCuota(cuota.getId()));
         } catch (SQLException e) {
             mostrarError("Error: " + e.getMessage());
         }
 
         root.setCenter(tabla);
 
-        // Botones
+        // ===== BOTTOM: registrar entrega + cerrar =====
         HBox botones = new HBox(10);
         botones.setAlignment(Pos.CENTER);
-        botones.setPadding(new Insets(10));
+        botones.setPadding(new Insets(12));
 
-        Button btnNuevo = new Button("➕ Registrar Pago");
-        btnNuevo.getStyleClass().addAll("button", "button-success");
-        btnNuevo.setOnAction(e -> {
-            registrarPagoCuota(cuota, listaPagos, listaCuotas, lblInfo, lblProgreso);
-        });
-
-        Button btnEliminar = new Button("🗑️ Eliminar");
-        btnEliminar.getStyleClass().add("btn-danger");
-        btnEliminar.setOnAction(e -> {
-            PagoCuota sel = tabla.getSelectionModel().getSelectedItem();
-            if (sel != null) {
+        Button btnNuevaEntrega = new Button("➕ Registrar Entrega de Dinero");
+        btnNuevaEntrega.getStyleClass().addAll("button", "button-success");
+        btnNuevaEntrega.setOnAction(e -> {
+            abrirFormularioEntregaDinero(cuota, listaPagos, () -> {
                 try {
-                    cuotaService.eliminarPagoCuota(sel.getId(), sel.getCuotaId(), sel.getMonto());
-                    listaPagos.remove(sel);
-
-                    // Recargar cuota actualizada
-                    Optional<Cuota> cuotaActualizada = cuotaService.buscarCuotaPorId(cuota.getId());
-                    if (cuotaActualizada.isPresent()) {
-                        Cuota c = cuotaActualizada.get();
-                        lblInfo.setText(String.format("Cuota: $%.2f | Pagado: $%.2f | Pendiente: $%.2f",
-                                c.getMontoTotalAcordado(), c.getMontoPagado(), c.getSaldoPendiente()));
-                        lblProgreso.setText(String.format("Progreso: %.1f%%", c.getPorcentajePagado()));
-
-                        // Actualizar en la lista principal
-                        int idx = listaCuotas.indexOf(cuota);
-                        if (idx >= 0) {
-                            listaCuotas.set(idx, c);
-                        }
+                    Optional<Cuota> actualizada = cuotaService.buscarCuotaPorId(cuota.getId());
+                    if (actualizada.isPresent()) {
+                        copiarEstadoCuota(actualizada.get(), cuota);
+                        actualizarHeader.run();
+                        refrescarListaPlanes(listaPlanes, cuota);
                     }
-
-                    mostrarInfo("Pago eliminado");
                 } catch (SQLException ex) {
                     mostrarError("Error: " + ex.getMessage());
                 }
-            }
+            });
         });
 
         Button btnCerrar = new Button("✅ Cerrar");
         btnCerrar.setOnAction(e -> ventana.close());
 
-        botones.getChildren().addAll(btnNuevo, btnEliminar, btnCerrar);
+        botones.getChildren().addAll(btnNuevaEntrega, btnCerrar);
         root.setBottom(botones);
 
-        Scene scene = new Scene(root, 700, 500);
+        Scene scene = new Scene(root, 650, 500);
         scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.showAndWait();
     }
 
+    // Copia los campos relevantes de una Cuota actualizada a la instancia que tiene la UI
+    private void copiarEstadoCuota(Cuota origen, Cuota destino) {
+        destino.setMontoPagado(origen.getMontoPagado());
+        destino.setEstado(origen.getEstado());
+    }
 
-    private void registrarPagoCuota(Cuota cuota, ObservableList<PagoCuota> listaPagos,
-                                    ObservableList<Cuota> listaCuotas, Label lblInfo, Label lblProgreso) {
+    // Refresca la fila correspondiente en la tabla principal de planes
+    private void refrescarListaPlanes(ObservableList<Cuota> listaPlanes, Cuota cuota) {
+        int idx = listaPlanes.indexOf(cuota);
+        if (idx >= 0) {
+            listaPlanes.set(idx, cuota);
+        }
+    }
+
+    private void abrirFormularioEntregaDinero(Cuota cuota, ObservableList<PagoCuota> listaPagos, Runnable alGuardar) {
         Stage ventana = new Stage();
         ventana.initModality(Modality.APPLICATION_MODAL);
-        ventana.setTitle("Registrar Pago de Cuota");
+        ventana.setTitle("Registrar Entrega de Dinero");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
+
+        ColumnConstraints colLabel = new ColumnConstraints();
+        colLabel.setMinWidth(110);
+        colLabel.setPrefWidth(110);
+        ColumnConstraints colCampo = new ColumnConstraints();
+        colCampo.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().addAll(colLabel, colCampo);
 
         int row = 0;
 
@@ -2371,21 +2260,30 @@ public class MainController {
 
         grid.add(new Label("Monto *:"), 0, row);
         TextField txtMonto = new TextField();
-        txtMonto.setPromptText(String.format("Pendiente: $%.2f", cuota.getSaldoPendiente()));
+        txtMonto.setPromptText(String.format("Pendiente: %s", formatearMoneda(cuota.getSaldoPendiente())));
         grid.add(txtMonto, 1, row++);
+
+        Label lblCuotasQueCancelan = new Label("—");
+        lblCuotasQueCancelan.setStyle("-fx-text-fill: #185FA5; -fx-font-weight: bold;");
+        if (cuota.getMontoPorCuota() != null && cuota.getMontoPorCuota() > 0) {
+            txtMonto.textProperty().addListener((obs, oldV, newV) -> {
+                try {
+                    double monto = Double.parseDouble(newV.trim());
+                    double cuotasQueCancelan = monto / cuota.getMontoPorCuota();
+                    lblCuotasQueCancelan.setText(String.format("≈ %.1f cuota(s)", cuotasQueCancelan));
+                } catch (NumberFormatException ex) {
+                    lblCuotasQueCancelan.setText("—");
+                }
+            });
+            grid.add(new Label("Equivale a:"), 0, row);
+            grid.add(lblCuotasQueCancelan, 1, row++);
+        }
 
         grid.add(new Label("Forma de Pago:"), 0, row);
         ComboBox<String> cmbForma = new ComboBox<>();
-        cmbForma.setItems(FXCollections.observableArrayList(
-                "Efectivo", "Transferencia", "Cheque", "Tarjeta", "Otro"
-        ));
+        cmbForma.setItems(FXCollections.observableArrayList("Efectivo", "Transferencia", "Cheque", "Tarjeta", "Otro"));
         cmbForma.setValue("Efectivo");
         grid.add(cmbForma, 1, row++);
-
-        grid.add(new Label("Nro. de Cuota:"), 0, row);
-        TextField txtNumero = new TextField();
-        txtNumero.setPromptText("Opcional - Ej: 1, 2, 3...");
-        grid.add(txtNumero, 1, row++);
 
         grid.add(new Label("Referencia:"), 0, row);
         TextField txtRef = new TextField();
@@ -2410,16 +2308,13 @@ public class MainController {
                     return;
                 }
 
+                double monto = Double.parseDouble(txtMonto.getText().trim());
+
                 PagoCuota pago = new PagoCuota();
                 pago.setCuotaId(cuota.getId());
                 pago.setFechaPago(dpFecha.getValue());
-                pago.setMonto(Double.parseDouble(txtMonto.getText().trim()));
+                pago.setMonto(monto);
                 pago.setFormaPago(cmbForma.getValue());
-
-                if (!txtNumero.getText().trim().isEmpty()) {
-                    pago.setNumeroCuota(Integer.parseInt(txtNumero.getText().trim()));
-                }
-
                 pago.setReferencia(txtRef.getText().trim());
                 pago.setObservaciones(txtObs.getText().trim());
                 pago.setUsuarioId(SesionUsuario.getUsuarioActual().getId());
@@ -2427,22 +2322,8 @@ public class MainController {
                 cuotaService.registrarPagoCuota(pago);
                 listaPagos.add(pago);
 
-                // Recargar cuota actualizada
-                Optional<Cuota> cuotaActualizada = cuotaService.buscarCuotaPorId(cuota.getId());
-                if (cuotaActualizada.isPresent()) {
-                    Cuota c = cuotaActualizada.get();
-                    lblInfo.setText(String.format("Cuota: $%.2f | Pagado: $%.2f | Pendiente: $%.2f",
-                            c.getMontoTotalAcordado(), c.getMontoPagado(), c.getSaldoPendiente()));
-                    lblProgreso.setText(String.format("Progreso: %.1f%%", c.getPorcentajePagado()));
-
-                    // Actualizar en la lista principal
-                    int idx = listaCuotas.indexOf(cuota);
-                    if (idx >= 0) {
-                        listaCuotas.set(idx, c);
-                    }
-                }
-
-                mostrarInfo("Pago registrado correctamente");
+                mostrarInfo("Entrega registrada correctamente");
+                alGuardar.run();
                 ventana.close();
 
             } catch (NumberFormatException ex) {
@@ -2459,18 +2340,25 @@ public class MainController {
 
         VBox root = new VBox(15);
         root.getChildren().addAll(
-                new Label("Registrar Pago de Cuota"),
+                new Label("Registrar Entrega de Dinero"),
                 new Separator(),
                 grid,
                 botones
         );
         root.setPadding(new Insets(20));
 
-        Scene scene = new Scene(root);
+        Scene scene = new Scene(root, 470, 420);
         scene.getStylesheets().add(getClass().getResource("/css/styles.css").toExternalForm());
         ventana.setScene(scene);
         ventana.showAndWait();
     }
+
+
+
+
+
+
+
 
 
 
@@ -5291,25 +5179,61 @@ public class MainController {
     }
 
     // Método para crear backup
+    // Método para crear backup completo (BD + documentos) en un .zip
     private void crearBackupBaseDatos() {
         try {
             javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
-            fileChooser.setTitle("Guardar Backup");
-            fileChooser.setInitialFileName("juridix_backup_" + LocalDate.now() + ".db");
+            fileChooser.setTitle("Guardar Backup Completo");
+            fileChooser.setInitialFileName("juridix_backup_" + LocalDate.now() + ".zip");
             fileChooser.getExtensionFilters().add(
-                    new javafx.stage.FileChooser.ExtensionFilter("Base de Datos SQLite", "*.db")
+                    new javafx.stage.FileChooser.ExtensionFilter("Archivo ZIP", "*.zip")
             );
 
             File destino = fileChooser.showSaveDialog(stage);
-            if (destino != null) {
-                File origen = new File("juridix.db");
-                java.nio.file.Files.copy(origen.toPath(), destino.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                mostrarInfo("Backup creado correctamente en:\n" + destino.getAbsolutePath());
+            if (destino == null) {
+                return;
             }
+
+            File carpetaOrigen = new File(Database.getAppDirectory());
+            if (!carpetaOrigen.exists()) {
+                mostrarError("No se encontró la carpeta de datos en: " + carpetaOrigen.getAbsolutePath());
+                return;
+            }
+
+            comprimirCarpeta(carpetaOrigen, destino);
+            mostrarInfo("Backup completo creado correctamente en:\n" + destino.getAbsolutePath()
+                    + "\n\nIncluye la base de datos y todos los documentos subidos.");
 
         } catch (Exception e) {
             mostrarError("Error al crear backup: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // Comprime una carpeta completa (recursivamente) en un archivo .zip
+
+    private void comprimirCarpeta(File carpetaOrigen, File archivoZipDestino) throws IOException {
+        try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
+                new java.io.FileOutputStream(archivoZipDestino))) {
+
+            java.nio.file.Path carpetaBase = carpetaOrigen.toPath();
+
+            try (java.util.stream.Stream<java.nio.file.Path> stream = java.nio.file.Files.walk(carpetaBase)) {
+                stream.filter(path -> !java.nio.file.Files.isDirectory(path))
+                        .forEach(path -> {
+                            if (path.toAbsolutePath().equals(archivoZipDestino.toPath().toAbsolutePath())) {
+                                return;
+                            }
+                            String nombreEnZip = carpetaBase.relativize(path).toString().replace("\\", "/");
+                            try {
+                                zos.putNextEntry(new java.util.zip.ZipEntry(nombreEnZip));
+                                java.nio.file.Files.copy(path, zos);
+                                zos.closeEntry();
+                            } catch (IOException e) {
+                                System.err.println("⚠️ Error al comprimir " + path + ": " + e.getMessage());
+                            }
+                        });
+            }
         }
     }
 
